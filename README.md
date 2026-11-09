@@ -13,7 +13,7 @@ ESP32 ──UART (AT)── Módulo NB-IoT ~~ antena ~~ USRP (eNB) ── UTP �
 | 0 | Reglas de transmisión RF | Herramientas y módulo Radio del panel listos; falta la confirmación escrita del docente (banda, potencia, antena) |
 | 1 | Núcleo Open5GS dockerizado, sin radio | Hecha y validada con radio virtual |
 | 2 | Cadena de radio con LTE normal (USRP + teléfono) | Omitida (sin teléfono; la comprobación del USRP pasa a la Fase 3) |
-| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: imagen Docker `docker/oai-nbiot` compilando; falta configurar el eNB |
+| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: el eNB compila (probado en contenedor); falta configurarlo, validar la imagen Docker completa y la prueba con USRP |
 | 4 | El módulo se registra | Software listo (guía, WebUI, panel); falta hardware (módulo, SIM) y eNB |
 | 5 | Datos reales (MQTT) | Broker, panel y firmware listos (probados con simulador; firmware sin probar en hardware) |
 | 6 | PSM, eDRX y consumo | Pendiente |
@@ -66,7 +66,9 @@ docker build -t narrowcast-nb/oai-nbiot:local docker/oai-nbiot   # tarda 30-70 m
 - El código se baja con clon superficial (`--depth 1`, ~50 MB); el historial completo pesa varios GB. El build falla si la punta de la rama deja de ser el commit fijado.
 - Para compilar sin radio (solo S1/stack): `--build-arg OAI_HW=none`.
 - Configuración base de ejemplo (B7, a adaptar a la banda autorizada): `targets/PROJECTS/GENERIC-LTE-EPC/CONF/enb.nbiot.band7.tm1.50PRB.usrp210.conf` dentro del repositorio de OAI.
-- Estado: compilación en pruebas. Pendiente: configuración del eNB, conexión S1 al MME (`10.44.0.10`) y barrido de espectro.
+- **Corrección necesaria:** el script de OAI clona `protobuf-c` sin fijar versión y la actual exige C++17, que Ubuntu 16.04 no tiene. El `Dockerfile` fija la v1.3.3 (compatible con el protobuf 2.6.1 del mismo script).
+- **Estado:** el eNB (`lte-softmodem`, UHD 3.15, dispositivo USRP) compiló con esa corrección y arranca (`-h`) dentro de un contenedor de pruebas. El `Dockerfile` completo aún no se ha validado de principio a fin (tarda ~20 min y necesita ~4 GB libres). Pendiente: configuración del eNB, conexión S1 al MME (`10.44.0.10`) y barrido de espectro.
+- **Riesgo conocido:** la rama tiene funciones de subida marcadas como no conformes con 3GPP y se ha probado con módulos Quectel BC95 y un núcleo Nokia, no con Open5GS. Compilar no garantiza que el módulo se registre. Plan B: la rama `nb-iot-ubuntu24`.
 
 ## Panel de control (fases 0, 4 y 5)
 

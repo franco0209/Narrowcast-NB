@@ -19,6 +19,10 @@ RUN git clone --depth 1 --branch "${OAI_BRANCH}" "${OAI_REPO}" oai \
     && test "$(git rev-parse HEAD)" = "${OAI_COMMIT}"
 
 WORKDIR /opt/oai
+# El script de OAI clona protobuf-c sin fijar versión; la actual exige C++17 (no existe en Ubuntu 16.04).
+# Se fija v1.3.3, compatible con el protobuf 2.6.1 que instala el mismo script.
+RUN sed -i 's#git clone https://github.com/protobuf-c/protobuf-c.git#git clone --branch v1.3.3 --depth 1 https://github.com/protobuf-c/protobuf-c.git#' cmake_targets/tools/build_helper \
+    && grep -q 'branch v1.3.3' cmake_targets/tools/build_helper
 RUN . ./oaienv && cd cmake_targets \
     && ./build_oai -I --eNB -x -w "${OAI_HW}" --install-system-files 2>&1 | tail -n 200 \
     && ls -l lte_build_oai/build/lte-softmodem \
