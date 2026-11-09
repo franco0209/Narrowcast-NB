@@ -257,7 +257,7 @@ firmware/               código del ESP32
 data/                   plan RF y registro de sesiones (no se versiona)
 docker/                 Dockerfiles (open5gs, srsran4g, webui, oai-nbiot)
 scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh
-docs/                   plan del proyecto
+docs/                   plan del proyecto, guías del panel y presentación de avance (Narrowcast-NB-avance.pptx)
 ```
 
 `.env`, `data/`, `firmware/**/secrets.h` y los `.pcap` no se versionan.
