@@ -28,3 +28,15 @@ provisioning/         alta del suscriptor en MongoDB
 docker/               Dockerfiles (open5gs, srsran4g, webui)
 scripts/              sim.sh, validate.sh
 ```
+
+## Fase 0: reglas de transmisión RF
+
+RF apagada por defecto. Antes de emitir con un USRP real:
+
+```bash
+cp rf-plan.example.yaml rf-plan.yaml   # fuera de Git; completar con banda, EARFCN, autorización...
+scripts/rf-check.sh                    # bloquea si falta algo (banda, autorización, ganancia, atenuador...)
+scripts/rf-run.sh --resultado "ok" -- <comando del eNB>   # comprueba, limita la duración y registra en logs/rf-sessions.csv
+```
+
+Por defecto, cable y atenuador ≥ 60 dB; la antena solo con permiso escrito del docente. La radio virtual (ZMQ) de la Fase 1 no emite RF y no necesita esto.

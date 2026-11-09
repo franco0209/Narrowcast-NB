@@ -1,0 +1,12 @@
+# Copiar a rf-plan.yaml (fuera de Git) y completar. Mientras falte algo, rf-check.sh bloquea la emisión.
+band:               # soportada por el módulo Y autorizada (B3, B8, B20, B28)
+earfcn:             # portadora NB-IoT elegida en el barrido (Fase 3)
+dl_freq_hz:
+ul_freq_hz:
+tx_gain: 0          # empezar en el mínimo y subir de a poco
+modo: cable         # cable (por defecto) | antena
+atenuacion_db: 60   # mínimo 60 en modo cable
+duracion_max_s: 600
+portadora_libre: no # sí/no: barrido hecho y sin señales reales en esa portadora
+antena_autorizada: no  # sí solo con permiso escrito del docente (modo antena)
+autorizado_por:     # nombre del docente y fecha
