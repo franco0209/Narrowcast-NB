@@ -12,8 +12,8 @@ ESP32 ──UART (AT)── Módulo NB-IoT ~~ antena ~~ USRP (eNB) ── UTP �
 |---|---|---|
 | 0 | Reglas de transmisión RF | Herramientas listas; falta la confirmación escrita del docente (banda, potencia, antena) |
 | 1 | Núcleo Open5GS dockerizado, sin radio | Hecha y validada con radio virtual |
-| 2 | Cadena de radio con LTE normal (USRP + teléfono) | Pendiente |
-| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | Pendiente |
+| 2 | Cadena de radio con LTE normal (USRP + teléfono) | Omitida (sin teléfono; la comprobación del USRP pasa a la Fase 3) |
+| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: imagen Docker `docker/oai-nbiot` |
 | 4 | El módulo se registra | Pendiente |
 | 5 | Datos reales (MQTT) | Pendiente |
 | 6 | PSM, eDRX y consumo | Pendiente |

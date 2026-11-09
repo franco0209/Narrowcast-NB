@@ -59,16 +59,11 @@ La banda manda sobre lo demás, porque el módulo debe soportarla. Los módulos 
 2. Configurar el **PLMN de prueba 001/01** y un **TAC** (por ejemplo 1).
 3. Validar el núcleo con una radio **virtual** (srsRAN con ZMQ). Si un UE simulado se registra y obtiene IP, el núcleo está bien.
 
-## Fase 2: validar la cadena de radio con LTE normal (2–3 días)
+## Fase 2: validar la cadena de radio con LTE normal (OMITIDA)
 
-Comprobar que el USRP, las antenas y la banda funcionan repitiendo lo que se hizo en el laboratorio: un eNB LTE con srsRAN y un teléfono registrado en la red. Los teléfonos no se conectan solos al PLMN 001/01, hay que elegir la red manualmente.
+Decisión del proyecto: no se prueba con teléfono, así que esta fase se omite. Lo que aportaba (comprobar que el USRP, el cable y la banda funcionan) pasa a la Fase 3: antes de usar OAI se puede lanzar un eNB LTE con srsRAN y mirar el espectro con un analizador u otro SDR, sin teléfono. Si la portadora NB-IoT de la Fase 3 no aparece, esa comprobación ayuda a separar un fallo del USRP de un fallo de OAI.
 
-Con antenas:
-
-- Empezar con la **ganancia de transmisión más baja** del USRP y subir de a poco.
-- Mantener el módulo a **uno o dos metros** de la antena y medir con un analizador de espectro (o con otro SDR) que no se supera la potencia autorizada.
-- Respetar la **banda y los horarios** acordados.
-- Seguir las reglas de la Fase 0 (`rf-plan.yaml`, cable primero, sesiones cortas).
+Las reglas de la Fase 0 (`rf-plan.yaml`, cable primero, ganancia baja, sesiones cortas) siguen aplicando a cualquier emisión.
 
 ## Fase 3: el eNB NB-IoT, el punto crítico (1–2 semanas)
 
