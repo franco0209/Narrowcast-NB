@@ -10,18 +10,18 @@ ESP32 ──UART (AT)── Módulo NB-IoT ~~ antena ~~ USRP (eNB) ── UTP �
 
 | Fase | Descripción | Estado |
 |---|---|---|
-| 0 | Reglas de transmisión RF | Herramientas listas; falta la confirmación escrita del docente (banda, potencia, antena) |
+| 0 | Reglas de transmisión RF | Herramientas y módulo Radio del panel listos; falta la confirmación escrita del docente (banda, potencia, antena) |
 | 1 | Núcleo Open5GS dockerizado, sin radio | Hecha y validada con radio virtual |
 | 2 | Cadena de radio con LTE normal (USRP + teléfono) | Omitida (sin teléfono; la comprobación del USRP pasa a la Fase 3) |
-| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: imagen Docker `docker/oai-nbiot` |
-| 4 | El módulo se registra | Pendiente |
-| 5 | Datos reales (MQTT) | Pendiente |
+| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: imagen Docker `docker/oai-nbiot` compilando; falta configurar el eNB |
+| 4 | El módulo se registra | Software listo (guía, WebUI, panel); falta hardware (módulo, SIM) y eNB |
+| 5 | Datos reales (MQTT) | Broker, panel y firmware listos (probados con simulador; firmware sin probar en hardware) |
 | 6 | PSM, eDRX y consumo | Pendiente |
 | 7 | Informe y demostración | Pendiente |
 
 ## Requisitos
 
-Docker con Compose v2. Para las fases con radio real, además un USRP y el módulo con su SIM.
+Docker con Compose v2 (y unos 10 GB libres en disco para las imágenes; la de OAI sola ocupa varios GB). Para las fases con radio real, además un USRP y el módulo con su SIM.
 
 ## Fase 1: núcleo (EPC) dockerizado, sin radio real
 

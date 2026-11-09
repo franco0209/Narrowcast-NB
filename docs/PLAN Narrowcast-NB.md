@@ -89,9 +89,13 @@ srsRAN no completa un registro NB-IoT. Se usa el eNB de **OpenAirInterface (OAI)
 3. Capturar el tráfico **S1** con Wireshark en el PC del núcleo y ver el Attach completo: petición, autenticación y aceptación.
 4. Si el attach falla, revisar el log del MME de Open5GS (clave mal cargada, PLMN o TAC distintos, banda no soportada).
 
+## Herramienta de apoyo: panel web
+
+Desde la Fase 0 hay un panel web (`http://127.0.0.1:8080`) con cuatro módulos: **Guía** (instrucciones por fase), **Radio** (plan RF, comprobaciones y activación de la transmisión con confirmación y corte automático), **Dispositivo** (MQTT: telemetría y órdenes al ESP32) y **Núcleo** (estado de contenedores y suscriptores). Detalles en `README.md`.
+
 ## Fase 5: datos reales (2–3 días)
 
-Instalar un broker **MQTT (Mosquitto)** en el PC. El ESP32 lee un sensor (por ejemplo un DHT22) y envía el valor por el módulo hasta el broker, atravesando la red privada completa.
+Broker **MQTT (Mosquitto)** en el PC, ya incluido como servicio Docker (`mosquitto`, con usuario y clave; ver `README.md`). El ESP32 lee un sensor (por ejemplo un DHT22) y envía el valor por el módulo hasta el broker, atravesando la red privada completa. El panel web (`app`, puerto 8080) muestra la telemetría en vivo y envía órdenes al ESP32 (LED, intervalo de envío) por los tópicos `nb/<id>/telemetry|cmd|status`. El firmware de ejemplo está en `firmware/esp32-nbiot/`.
 
 ## Fase 6: PSM, eDRX y consumo (1 semana)
 
