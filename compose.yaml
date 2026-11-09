@@ -159,6 +159,23 @@ services:
     volumes: ["./config/srsran/ue.conf:/etc/srsran/ue.conf:ro"]
     networks: { epc: { ipv4_address: 10.44.0.41 } }
 
+  # eNB NB-IoT real (OAI). Perfil "radio": no arranca solo; lo enciende el panel (Radio) tras validar el plan RF.
+  # Crear una vez: docker compose --profile radio create enb-nbiot
+  # Para un USRP USB (B2xx) anadir: devices: ["/dev/bus/usb:/dev/bus/usb"] (y privileged si el USB no se ve).
+  enb-nbiot:
+    profiles: [radio]
+    image: ${OAI_IMAGE:-narrowcast-nb/oai-nbiot:local}
+    container_name: nb-enb-nbiot
+    command: ["/scripts/oai-enb-start.sh"]
+    environment:
+      S1_ONLY: ${S1_ONLY:-0}
+      RF_PLAN: /data/rf-plan.yaml
+    volumes:
+      - ./config/oai/enb.nbiot.conf.tmpl:/config/enb.nbiot.conf.tmpl:ro
+      - ./scripts/oai-enb-start.sh:/scripts/oai-enb-start.sh:ro
+      - ./data:/data:ro
+    networks: { epc: { ipv4_address: 10.44.0.40 } }
+
 networks:
   epc:
     name: narrowcast-nb-core

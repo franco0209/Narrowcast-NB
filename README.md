@@ -13,7 +13,7 @@ ESP32 ──UART (AT)── Módulo NB-IoT ~~ antena ~~ USRP (eNB) ── UTP �
 | 0 | Reglas de transmisión RF | Herramientas y módulo Radio del panel listos; falta la confirmación escrita del docente (banda, potencia, antena) |
 | 1 | Núcleo Open5GS dockerizado, sin radio | Hecha y validada con radio virtual |
 | 2 | Cadena de radio con LTE normal (USRP + teléfono) | Omitida (sin teléfono; la comprobación del USRP pasa a la Fase 3) |
-| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: la imagen Docker del eNB compila y arranca (validada); falta configurarlo y probarlo con USRP |
+| 3 | eNB NB-IoT (OAI `develop-nb-iot`) | En curso: imagen validada y eNB configurado; el S1 Setup con el MME funciona (sin radio); falta probarlo con USRP |
 | 4 | El módulo se registra | Software listo (guía, WebUI, panel); falta hardware (módulo, SIM) y eNB |
 | 5 | Datos reales (MQTT) | Broker, panel y firmware listos (probados con simulador; firmware sin probar en hardware) |
 | 6 | PSM, eDRX y consumo | Pendiente |
@@ -67,7 +67,10 @@ docker build -t narrowcast-nb/oai-nbiot:local docker/oai-nbiot   # ~20 min; la i
 - Para compilar sin radio (solo S1/stack): `--build-arg OAI_HW=none`.
 - Configuración base de ejemplo (B7, a adaptar a la banda autorizada): `targets/PROJECTS/GENERIC-LTE-EPC/CONF/enb.nbiot.band7.tm1.50PRB.usrp210.conf` dentro del repositorio de OAI.
 - **Corrección necesaria:** el script de OAI clona `protobuf-c` sin fijar versión y la actual exige C++17, que Ubuntu 16.04 no tiene. El `Dockerfile` fija la v1.3.3 (compatible con el protobuf 2.6.1 del mismo script).
-- **Estado:** validado de principio a fin: `docker build` produce la imagen `narrowcast-nb/oai-nbiot:local` con el eNB (`lte-softmodem`, UHD 3.15, dispositivo USRP), que arranca (`-h`) y no tiene librerías faltantes. No se ha probado con radio real. Pendiente: configuración del eNB, conexión S1 al MME (`10.44.0.10`) y barrido de espectro.
+- **Estado:** validado de principio a fin: `docker build` produce la imagen `narrowcast-nb/oai-nbiot:local` con el eNB (`lte-softmodem`, UHD 3.15, dispositivo USRP), que arranca (`-h`) y no tiene librerías faltantes. No se ha probado con radio real. Pendiente: barrido de espectro y prueba con USRP.
+- **Configuración y arranque (sin rebuild):** `config/oai/enb.nbiot.conf.tmpl` (PLMN 001/01, TAC 1, MME `10.44.0.10`) y `scripts/oai-enb-start.sh`, que rellenan banda, frecuencia y ganancia desde `data/rf-plan.yaml` y lanzan `lte-softmodem`. Servicio `enb-nbiot` (perfil `radio`, contenedor `nb-enb-nbiot`, IP `10.44.0.40`); se crea una vez con `docker compose --profile radio create enb-nbiot` y lo enciende el panel.
+- **Verificado sin radio:** con `S1_ONLY=1` (solo pruebas, ignora el plan RF) el eNB hace `S1 Setup` y el MME lo registra (`eNB-S1 accepted`, `Number of eNBs is now 1`); después se detiene porque no hay USRP (`No USRP Device Found`). Es la prueba de que la parte de red funciona, no de la radio.
+- **A verificar con el USRP real:** el script supone que el `tx_gain` de OAI es atenuación (atenuación = 90 − ganancia del plan, válido para B210); un USRP USB necesita pasar `/dev/bus/usb` al contenedor (ver comentario en `compose.yaml`).
 - **Riesgo conocido:** la rama tiene funciones de subida marcadas como no conformes con 3GPP y se ha probado con módulos Quectel BC95 y un núcleo Nokia, no con Open5GS. Compilar no garantiza que el módulo se registre. Plan B: la rama `nb-iot-ubuntu24`.
 
 ## Panel de control (fases 0, 4 y 5)
@@ -86,7 +89,7 @@ Interfaz web en <http://127.0.0.1:8080> (servicio `app`, junto con el broker MQT
 - **Firmware:** `firmware/esp32-nbiot/` (Arduino IDE/PlatformIO, ESP32 + SIM7080G + DHT22 + LED). *Sin probar en hardware real.*
 - **Plan RF y sesiones:** `data/rf-plan.yaml` y `data/logs/rf-sessions.csv` (fuera de Git; los usan tanto el panel como `scripts/rf-*.sh`).
 - **Seguridad:** el panel monta el socket de Docker para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
-- **Pendiente:** el botón de transmisión controla el contenedor `nb-enb-nbiot`, que se creará al configurar el eNB (Fase 3). Hasta entonces el panel responde que falta ese contenedor.
+- **Pendiente:** el botón de transmisión controla el contenedor `nb-enb-nbiot`, que se crea con `docker compose --profile radio create enb-nbiot` (ya configurado; sin USRP el eNB arranca, hace S1 y se detiene).
 
 ## Estructura
 
@@ -96,6 +99,7 @@ compose.yaml            servicios (perfil `sim` = radio virtual)
 rf-plan.example.yaml    plantilla del plan RF (se guarda en data/rf-plan.yaml)
 config/open5gs/         MME, HSS, SGW-C/U, PGW-C/U (SMF/UPF), PCRF
 config/srsran/          eNB y UE virtuales
+config/oai/             plantilla del eNB NB-IoT (OAI)
 provisioning/           alta del suscriptor en MongoDB
 app/                    panel web (FastAPI + HTML/JS) y simulador de dispositivo
 mosquitto/              configuración del broker MQTT
