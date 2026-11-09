@@ -38,6 +38,41 @@ services:
     networks: { epc: { ipv4_address: 10.44.0.4 } }
     restart: unless-stopped
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: nb-mosquitto
+    entrypoint: ["/bin/sh", "/mosquitto/entrypoint.sh"]
+    environment:
+      MQTT_USER: ${MQTT_USER:?define MQTT_USER en .env}
+      MQTT_PASS: ${MQTT_PASS:?define MQTT_PASS en .env}
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/entrypoint.sh:/mosquitto/entrypoint.sh:ro
+    ports: ["127.0.0.1:${MQTT_PORT:-1883}:1883"]
+    networks: { epc: { ipv4_address: 10.44.0.5 } }
+    restart: unless-stopped
+
+  # Panel de control (guía, radio, dispositivo, núcleo). Monta el socket de Docker para
+  # encender/apagar el eNB: solo escucha en 127.0.0.1.
+  app:
+    image: ${APP_IMAGE:-narrowcast-nb/app:local}
+    build: { context: app }
+    container_name: nb-app
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_USER: ${MQTT_USER:?define MQTT_USER en .env}
+      MQTT_PASS: ${MQTT_PASS:?define MQTT_PASS en .env}
+      RADIO_CONTAINER: nb-enb-nbiot
+    depends_on: [mosquitto, mongo]
+    volumes:
+      - ./data:/data
+      - ./docs/guide:/guide:ro
+      - ./scripts:/project/scripts:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["127.0.0.1:${APP_PORT:-8080}:8080"]
+    networks: { epc: { ipv4_address: 10.44.0.6 } }
+    restart: unless-stopped
+
   mme:
     <<: *open5gs
     container_name: nb-mme

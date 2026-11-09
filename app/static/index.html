@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrowcast-NB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Narrowcast-NB</h1>
+  <span id="rf-pill" class="pill off">RF apagada</span>
+</header>
+<nav id="tabs">
+  <button data-tab="guia" class="active">Guía</button>
+  <button data-tab="radio">Radio</button>
+  <button data-tab="dispositivo">Dispositivo</button>
+  <button data-tab="nucleo">Núcleo</button>
+</nav>
+<main>
+  <section id="guia" class="tab active">
+    <div class="split"><ul id="guide-list" class="list"></ul><article id="guide-body" class="md"></article></div>
+  </section>
+
+  <section id="radio" class="tab">
+    <div class="grid2">
+      <div class="card">
+        <h2>Plan RF</h2>
+        <form id="plan-form"></form>
+        <button id="plan-save" class="btn">Guardar plan</button>
+      </div>
+      <div class="card">
+        <h2>Comprobaciones</h2>
+        <ul id="checks" class="checks"></ul>
+        <h2>Transmisión</h2>
+        <p id="radio-msg" class="muted"></p>
+        <div id="radio-run" hidden>
+          <p><b>Transmitiendo.</b> Corte automático en <span id="countdown">--</span> s.</p>
+          <button id="radio-stop" class="btn danger">Detener ahora</button>
+        </div>
+        <div id="radio-idle">
+          <label>Escribe <b>EMITIR</b> para activar
+            <input id="confirm" autocomplete="off" placeholder="EMITIR"></label>
+          <button id="radio-start" class="btn danger">Activar transmisión</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><h2>Sesiones</h2><table id="sessions"></table></div>
+  </section>
+
+  <section id="dispositivo" class="tab">
+    <div class="card">
+      <div class="row">
+        <label>Dispositivo <select id="dev-select"></select></label>
+        <span id="dev-badge" class="pill off">sin datos</span>
+      </div>
+      <div id="metrics" class="metrics"></div>
+      <svg id="chart" viewBox="0 0 400 100" preserveAspectRatio="none"></svg>
+      <p class="muted" id="chart-label"></p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Control</h2>
+        <div class="row"><button id="led-on" class="btn">Encender LED</button>
+          <button id="led-off" class="btn secondary">Apagar LED</button></div>
+        <div class="row"><label>Intervalo de envío (s)
+          <input id="interval" type="number" min="5" max="86400" value="60"></label>
+          <button id="interval-set" class="btn secondary">Aplicar</button></div>
+        <p class="muted">Las órdenes llegan al módulo cuando este despierta (con PSM puede tardar).</p>
+      </div>
+      <div class="card"><h2>Eventos</h2><ul id="events" class="events"></ul></div>
+    </div>
+  </section>
+
+  <section id="nucleo" class="tab">
+    <div class="grid2">
+      <div class="card"><h2>Contenedores</h2><ul id="containers" class="checks"></ul></div>
+      <div class="card"><h2>Suscriptores</h2><table id="subs"></table>
+        <p class="muted">Las claves (Ki, OPc) nunca se muestran aquí. Se gestionan en la WebUI de Open5GS.</p></div>
+    </div>
+    <p id="core-err" class="muted"></p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

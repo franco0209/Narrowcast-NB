@@ -1,4 +1,4 @@
 .env
-rf-plan.yaml
-logs/
+data/
 *.pcap
+firmware/**/secrets.h

@@ -46,12 +46,12 @@ scripts/sim.sh down
 RF apagada por defecto. Antes de emitir con un USRP real:
 
 ```bash
-cp rf-plan.example.yaml rf-plan.yaml   # fuera de Git; completar banda, EARFCN, autorización...
+cp rf-plan.example.yaml data/rf-plan.yaml   # fuera de Git (o editarlo desde el panel web)
 scripts/rf-check.sh                    # bloquea si falta algo
 scripts/rf-run.sh --resultado "ok" -- <comando del eNB>
 ```
 
-`rf-check.sh` exige: banda soportada por el módulo (B3, B8, B20, B28), EARFCN, `autorizado_por`, `tx_gain` ≤ 30, en modo cable atenuación ≥ 60 dB (en modo antena, permiso escrito), duración entre 1 y 600 s y portadora libre confirmada. `rf-run.sh` además corta el comando al cumplirse `duracion_max_s` y registra la sesión en `logs/rf-sessions.csv` (fecha, banda, ganancia, duración, resultado).
+`rf-check.sh` exige: banda soportada por el módulo (B3, B8, B20, B28), EARFCN, `autorizado_por`, `tx_gain` ≤ 30, en modo cable atenuación ≥ 60 dB (en modo antena, permiso escrito), duración entre 1 y 600 s y portadora libre confirmada. `rf-run.sh` además corta el comando al cumplirse `duracion_max_s` y registra la sesión en `data/logs/rf-sessions.csv` (fecha, banda, ganancia, duración, resultado).
 
 Por defecto, cable y atenuador; la antena solo con permiso escrito del docente. El script verifica que el plan esté completo, pero no mide potencia: eso se comprueba con un analizador de espectro. La radio virtual (ZMQ) de la Fase 1 no emite RF y no necesita nada de esto.
 
@@ -68,18 +68,40 @@ docker build -t narrowcast-nb/oai-nbiot:local docker/oai-nbiot   # tarda 30-70 m
 - Configuración base de ejemplo (B7, a adaptar a la banda autorizada): `targets/PROJECTS/GENERIC-LTE-EPC/CONF/enb.nbiot.band7.tm1.50PRB.usrp210.conf` dentro del repositorio de OAI.
 - Estado: compilación en pruebas. Pendiente: configuración del eNB, conexión S1 al MME (`10.44.0.10`) y barrido de espectro.
 
+## Panel de control (fases 0, 4 y 5)
+
+Interfaz web en <http://127.0.0.1:8080> (servicio `app`, junto con el broker MQTT `mosquitto`; ambos arrancan con `docker compose up -d`).
+
+| Módulo | Qué hace |
+|---|---|
+| **Guía** | Instrucciones por fase (archivos en `docs/guide/*.md`). |
+| **Radio** | Edita el plan RF, muestra las comprobaciones de `rf-check.sh` y activa/detiene el eNB: exige plan válido y escribir `EMITIR`, corta solo al cumplirse `duracion_max_s`, registra la sesión y apaga la RF si el panel se reinicia. |
+| **Dispositivo** | Telemetría en vivo del ESP32 (temperatura, humedad, RSSI), orden de LED e intervalo de envío, por MQTT. |
+| **Núcleo** | Estado de los contenedores y suscriptores (nunca muestra Ki/OPc). |
+
+- **MQTT:** usuario y clave en `.env` (`MQTT_USER`, `MQTT_PASS`); tópicos `nb/<id>/telemetry|cmd|status` (ver la guía 3).
+- **Probar sin hardware:** `docker compose exec app python fake_device.py esp32-sim`.
+- **Firmware:** `firmware/esp32-nbiot/` (Arduino IDE/PlatformIO, ESP32 + SIM7080G + DHT22 + LED). *Sin probar en hardware real.*
+- **Plan RF y sesiones:** `data/rf-plan.yaml` y `data/logs/rf-sessions.csv` (fuera de Git; los usan tanto el panel como `scripts/rf-*.sh`).
+- **Seguridad:** el panel monta el socket de Docker para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
+- **Pendiente:** el botón de transmisión controla el contenedor `nb-enb-nbiot`, que se creará al configurar el eNB (Fase 3). Hasta entonces el panel responde que falta ese contenedor.
+
 ## Estructura
 
 ```
 compose.yaml            servicios (perfil `sim` = radio virtual)
 .env.example            variables (copiar a .env)
-rf-plan.example.yaml    plantilla del plan RF (copiar a rf-plan.yaml)
+rf-plan.example.yaml    plantilla del plan RF (se guarda en data/rf-plan.yaml)
 config/open5gs/         MME, HSS, SGW-C/U, PGW-C/U (SMF/UPF), PCRF
 config/srsran/          eNB y UE virtuales
 provisioning/           alta del suscriptor en MongoDB
+app/                    panel web (FastAPI + HTML/JS) y simulador de dispositivo
+mosquitto/              configuración del broker MQTT
+firmware/               código del ESP32
+data/                   plan RF y registro de sesiones (no se versiona)
 docker/                 Dockerfiles (open5gs, srsran4g, webui, oai-nbiot)
 scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh
 docs/                   plan del proyecto
 ```
 
-`.env`, `rf-plan.yaml`, `logs/` y los `.pcap` no se versionan.
+`.env`, `data/`, `firmware/**/secrets.h` y los `.pcap` no se versionan.

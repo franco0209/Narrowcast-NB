@@ -2,8 +2,8 @@
 # Verifica rf-plan.yaml antes de transmitir. Sale con 0 solo si todo está en regla.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-plan="${RF_PLAN:-rf-plan.yaml}"
-[ -f "$plan" ] || { echo "FAIL  no existe $plan (copiar rf-plan.example.yaml)"; exit 1; }
+plan="${RF_PLAN:-data/rf-plan.yaml}"
+[ -f "$plan" ] || { echo "FAIL  no existe $plan (copiar rf-plan.example.yaml a data/rf-plan.yaml)"; exit 1; }
 
 get() { sed -n "s/^$1:[[:space:]]*\([^#]*\).*/\1/p" "$plan" | sed 's/[[:space:]]*$//' | head -1; }
 fail=0

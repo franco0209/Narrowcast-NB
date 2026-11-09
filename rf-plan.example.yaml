@@ -1,4 +1,4 @@
-# Copiar a rf-plan.yaml (fuera de Git) y completar. Mientras falte algo, rf-check.sh bloquea la emisión.
+# Copiar a data/rf-plan.yaml (fuera de Git) o editar desde la interfaz web y completar. Mientras falte algo, rf-check.sh bloquea la emisión.
 band:               # soportada por el módulo Y autorizada (B3, B8, B20, B28)
 earfcn:             # portadora NB-IoT elegida en el barrido (Fase 3)
 dl_freq_hz:
