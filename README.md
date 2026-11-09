@@ -55,6 +55,19 @@ scripts/rf-run.sh --resultado "ok" -- <comando del eNB>
 
 Por defecto, cable y atenuador; la antena solo con permiso escrito del docente. El script verifica que el plan esté completo, pero no mide potencia: eso se comprueba con un analizador de espectro. La radio virtual (ZMQ) de la Fase 1 no emite RF y no necesita nada de esto.
 
+## Fase 3: eNB NB-IoT (OAI), en curso
+
+Imagen `docker/oai-nbiot/`: OpenAirInterface rama `develop-nb-iot`, fijada al commit `677bbab` (punta de la rama, 2020). Esa rama solo soporta Ubuntu 14.04/16.04, así que la imagen parte de `ubuntu:16.04` y compila el eNB con soporte USRP (UHD).
+
+```bash
+docker build -t narrowcast-nb/oai-nbiot:local docker/oai-nbiot   # tarda 30-70 min y ocupa varios GB
+```
+
+- El código se baja con clon superficial (`--depth 1`, ~50 MB); el historial completo pesa varios GB. El build falla si la punta de la rama deja de ser el commit fijado.
+- Para compilar sin radio (solo S1/stack): `--build-arg OAI_HW=none`.
+- Configuración base de ejemplo (B7, a adaptar a la banda autorizada): `targets/PROJECTS/GENERIC-LTE-EPC/CONF/enb.nbiot.band7.tm1.50PRB.usrp210.conf` dentro del repositorio de OAI.
+- Estado: compilación en pruebas. Pendiente: configuración del eNB, conexión S1 al MME (`10.44.0.10`) y barrido de espectro.
+
 ## Estructura
 
 ```
@@ -64,7 +77,7 @@ rf-plan.example.yaml    plantilla del plan RF (copiar a rf-plan.yaml)
 config/open5gs/         MME, HSS, SGW-C/U, PGW-C/U (SMF/UPF), PCRF
 config/srsran/          eNB y UE virtuales
 provisioning/           alta del suscriptor en MongoDB
-docker/                 Dockerfiles (open5gs, srsran4g, webui)
+docker/                 Dockerfiles (open5gs, srsran4g, webui, oai-nbiot)
 scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh
 docs/                   plan del proyecto
 ```
