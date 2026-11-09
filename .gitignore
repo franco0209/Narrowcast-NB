@@ -1,0 +1,4 @@
+.env
+rf-plan.yaml
+logs/
+*.pcap

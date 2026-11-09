@@ -1,0 +1,136 @@
+name: narrowcast-nb
+
+x-open5gs: &open5gs
+  image: ${OPEN5GS_IMAGE:-narrowcast-nb/open5gs:local}
+  build: { context: docker/open5gs }
+  restart: unless-stopped
+
+services:
+  mongo:
+    image: mongo@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
+    container_name: nb-mongo
+    command: ["mongod", "--bind_ip_all"]
+    volumes: [mongo-data:/data/db]
+    networks: { epc: { ipv4_address: 10.44.0.2 } }
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  subscriber-provisioner:
+    image: mongo@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
+    container_name: nb-subscriber-provisioner
+    env_file: [.env]
+    depends_on: { mongo: { condition: service_healthy } }
+    volumes: ["./provisioning/subscriber-init.js:/subscriber-init.js:ro"]
+    command: ["mongosh", "mongodb://mongo:27017/open5gs", "/subscriber-init.js"]
+    networks: { epc: { ipv4_address: 10.44.0.3 } }
+    restart: "no"
+
+  webui:
+    image: ${WEBUI_IMAGE:-narrowcast-nb/open5gs-webui:local}
+    build: { context: docker/webui }
+    container_name: nb-webui
+    environment: { DB_URI: "mongodb://mongo/open5gs" }
+    depends_on: { mongo: { condition: service_healthy } }
+    ports: ["127.0.0.1:${WEBUI_PORT:-9999}:9999"]
+    networks: { epc: { ipv4_address: 10.44.0.4 } }
+    restart: unless-stopped
+
+  mme:
+    <<: *open5gs
+    container_name: nb-mme
+    command: ["open5gs-mmed", "-c", "/etc/open5gs/mme.yaml"]
+    environment: { FD_LISTEN_ON: 10.44.0.10, FD_HSS_CONNECT_TO: 10.44.0.11 }
+    depends_on: [hss, sgwc]
+    volumes: ["./config/open5gs/mme.yaml:/etc/open5gs/mme.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.10 } }
+
+  hss:
+    <<: *open5gs
+    container_name: nb-hss
+    command: ["open5gs-hssd", "-c", "/etc/open5gs/hss.yaml"]
+    environment: { FD_LISTEN_ON: 10.44.0.11, FD_MME_CONNECT_TO: 10.44.0.10 }
+    depends_on: { subscriber-provisioner: { condition: service_completed_successfully } }
+    volumes: ["./config/open5gs/hss.yaml:/etc/open5gs/hss.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.11 } }
+
+  sgwc:
+    <<: *open5gs
+    container_name: nb-sgwc
+    command: ["open5gs-sgwcd", "-c", "/etc/open5gs/sgwc.yaml"]
+    volumes: ["./config/open5gs/sgwc.yaml:/etc/open5gs/sgwc.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.12 } }
+
+  sgwu:
+    <<: *open5gs
+    container_name: nb-sgwu
+    command: ["open5gs-sgwud", "-c", "/etc/open5gs/sgwu.yaml"]
+    volumes: ["./config/open5gs/sgwu.yaml:/etc/open5gs/sgwu.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.13 } }
+
+  pgwc:
+    <<: *open5gs
+    container_name: nb-pgwc
+    command: ["open5gs-smfd", "-c", "/etc/open5gs/pgwc.yaml"]
+    environment: { FD_LISTEN_ON: 10.44.0.14, FD_PCRF_CONNECT_TO: 10.44.0.16 }
+    volumes: ["./config/open5gs/pgwc.yaml:/etc/open5gs/pgwc.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.14 } }
+
+  pgwu:
+    <<: *open5gs
+    container_name: nb-pgwu
+    command: ["open5gs-upfd", "-c", "/etc/open5gs/pgwu.yaml"]
+    environment: { UE_SUBNET: 10.58.0.0/16, UE_GATEWAY: 10.58.0.1 }
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    volumes: ["./config/open5gs/pgwu.yaml:/etc/open5gs/pgwu.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.15 } }
+
+  pcrf:
+    <<: *open5gs
+    container_name: nb-pcrf
+    command: ["open5gs-pcrfd", "-c", "/etc/open5gs/pcrf.yaml"]
+    environment: { FD_LISTEN_ON: 10.44.0.16, FD_SMF_CONNECT_TO: 10.44.0.14 }
+    depends_on: { mongo: { condition: service_healthy } }
+    volumes: ["./config/open5gs/pcrf.yaml:/etc/open5gs/pcrf.yaml:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.16 } }
+
+  # Radio virtual (ZMQ). Solo con el perfil "sim": docker compose --profile sim up -d
+  enb:
+    profiles: [sim]
+    image: ${SRSRAN_IMAGE:-narrowcast-nb/srsran4g:local}
+    build: { context: docker/srsran4g }
+    container_name: nb-enb
+    command: ["srsenb", "/etc/srsran/enb.conf", "--enb_files.rr_config=/etc/srsran/rr.conf", "--enb_files.sib_config=/etc/srsran/sib.conf", "--enb_files.rb_config=/etc/srsran/rb.conf"]
+    depends_on: [mme]
+    volumes:
+      - ./config/srsran/enb.conf:/etc/srsran/enb.conf:ro
+      - ./config/srsran/rr.conf:/etc/srsran/rr.conf:ro
+      - ./config/srsran/sib.conf:/etc/srsran/sib.conf:ro
+      - ./config/srsran/rb.conf:/etc/srsran/rb.conf:ro
+    networks: { epc: { ipv4_address: 10.44.0.40 } }
+
+  ue:
+    profiles: [sim]
+    image: ${SRSRAN_IMAGE:-narrowcast-nb/srsran4g:local}
+    container_name: nb-ue
+    command: ["srsue", "/etc/srsran/ue.conf"]
+    env_file: [.env]
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    depends_on: [enb]
+    volumes: ["./config/srsran/ue.conf:/etc/srsran/ue.conf:ro"]
+    networks: { epc: { ipv4_address: 10.44.0.41 } }
+
+networks:
+  epc:
+    name: narrowcast-nb-core
+    driver: bridge
+    ipam:
+      config: [{ subnet: 10.44.0.0/24 }]
+
+volumes:
+  mongo-data:
+    name: narrowcast-nb-mongo-data
