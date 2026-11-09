@@ -325,4 +325,22 @@ def core():
     return out
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+@app.get("/api/logs/{name}")
+def logs(name: str, tail: int = 80):
+    """Últimas líneas del log de un contenedor del proyecto (solo nb-*, solo lectura)."""
+    if not re.fullmatch(r"nb-[a-z0-9-]{1,30}", name):
+        raise HTTPException(400, "nombre de contenedor inválido")
+    try:
+        c = docker.from_env().containers.get(name)
+        raw = c.logs(tail=max(1, min(tail, 300))).decode("utf-8", "replace")
+    except docker.errors.NotFound:
+        raise HTTPException(404, "el contenedor no existe")
+    except Exception as e:
+        raise HTTPException(500, f"docker: {e}")
+    return {"name": name, "status": c.status, "lines": ANSI.sub("", raw).splitlines()}
+
+
 app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")

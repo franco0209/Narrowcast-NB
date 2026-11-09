@@ -34,7 +34,7 @@ El software está listo hasta donde se puede sin hardware. Lo que queda depende 
 | PSM/eDRX, medición de consumo (INA226 u otro instrumento) | Hardware | 6 |
 | Capturas de Wireshark, tabla de consumos, informe y demostración | Todo lo anterior | 7 |
 
-Sin resolver aún en software: la vista del panel no se revisó visualmente en un navegador, y el panel no tiene todavía módulos de consumo, consola AT ni captura S1.
+Sin resolver aún en software: el panel no tiene todavía módulos de consumo, consola AT ni captura S1.
 
 ## Requisitos
 
@@ -96,10 +96,13 @@ Interfaz web en <http://127.0.0.1:8080> (servicio `app`, junto con el broker MQT
 
 | Módulo | Qué hace |
 |---|---|
+| **Resumen** | Mapa animado de la red (ESP32 → eNB → MME/SGW/PGW → Mosquitto → panel) con el estado real de cada contenedor; al hacer clic en un elemento muestra qué hace, sus interfaces y su registro. Las líneas se animan solo cuando ambos extremos están activos. |
+| **Radio** | Plan RF con valores seguros ya cargados (B3, cable con 60 dB, ganancia 0, 120 s); se elige banda con un clic y todo se guarda solo. Solo faltan dos confirmaciones humanas: **portadora libre** y **autorizado por**. El botón de transmisión exige plan válido y mantenerlo pulsado 1,5 s; corta solo al cumplirse la duración, registra la sesión y apaga la RF si el panel se reinicia. |
+| **Dispositivo** | Telemetría en vivo del ESP32 (medidores de temperatura/humedad, barras de señal, gráfico con tooltip), bombilla interactiva para el LED e intervalo de envío, por MQTT. |
+| **Núcleo** | Estado de los contenedores, suscriptores (nunca Ki/OPc) y registro en vivo de cada contenedor (`/api/logs/<nb-...>`, solo lectura). |
 | **Guía** | Instrucciones por fase (archivos en `docs/guide/*.md`). |
-| **Radio** | Edita el plan RF, muestra las comprobaciones de `rf-check.sh` y activa/detiene el eNB: exige plan válido y escribir `EMITIR`, corta solo al cumplirse `duracion_max_s`, registra la sesión y apaga la RF si el panel se reinicia. |
-| **Dispositivo** | Telemetría en vivo del ESP32 (temperatura, humedad, RSSI), orden de LED e intervalo de envío, por MQTT. |
-| **Núcleo** | Estado de los contenedores y suscriptores (nunca muestra Ki/OPc). |
+
+La interfaz sigue el tema claro/oscuro del sistema y no usa librerías externas. Con `?still` en la URL se desactivan las animaciones (útil para capturas).
 
 - **MQTT:** usuario y clave en `.env` (`MQTT_USER`, `MQTT_PASS`); tópicos `nb/<id>/telemetry|cmd|status` (ver la guía 3).
 - **Probar sin hardware:** `docker compose exec app python fake_device.py esp32-sim`.

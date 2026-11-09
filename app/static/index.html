@@ -7,80 +7,122 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <h1>Narrowcast-NB</h1>
-  <span id="rf-pill" class="pill off">RF apagada</span>
+<div class="bg-glow" aria-hidden="true"></div>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="16" r="3" class="b-core"/><circle cx="16" cy="16" r="8" class="b-ring r1"/><circle cx="16" cy="16" r="13" class="b-ring r2"/></svg>
+    <div><h1>Narrowcast-NB</h1><small>Red privada NB-IoT · Open5GS</small></div>
+  </div>
+  <nav id="tabs">
+    <button data-tab="resumen" class="active"><i>◎</i>Resumen</button>
+    <button data-tab="radio"><i>◉</i>Radio</button>
+    <button data-tab="dispositivo"><i>▤</i>Dispositivo</button>
+    <button data-tab="nucleo"><i>▦</i>Núcleo</button>
+    <button data-tab="guia"><i>≡</i>Guía</button>
+  </nav>
+  <div class="status">
+    <span id="rf-pill" class="pill off"><span class="dot"></span><span id="rf-text">RF apagada</span></span>
+    <span id="clock" class="muted"></span>
+  </div>
 </header>
-<nav id="tabs">
-  <button data-tab="guia" class="active">Guía</button>
-  <button data-tab="radio">Radio</button>
-  <button data-tab="dispositivo">Dispositivo</button>
-  <button data-tab="nucleo">Núcleo</button>
-</nav>
+
 <main>
-  <section id="guia" class="tab active">
-    <div class="split"><ul id="guide-list" class="list"></ul><article id="guide-body" class="md"></article></div>
+  <!-- RESUMEN -->
+  <section id="resumen" class="tab active">
+    <div class="kpis" id="kpis"></div>
+    <div class="card topo-card">
+      <div class="card-h"><h2>Mapa de la red</h2>
+        <div class="legend"><span><i class="lg ctrl"></i>señalización</span><span><i class="lg user"></i>datos de usuario</span><span><i class="lg radio"></i>radio</span></div></div>
+      <svg id="topo" viewBox="0 0 960 400" role="img" aria-label="Diagrama de la red"></svg>
+      <div id="node-info" class="node-info"><p class="muted">Haz clic en un elemento del mapa para ver qué hace, con qué se conecta y su registro.</p></div>
+    </div>
   </section>
 
+  <!-- RADIO -->
   <section id="radio" class="tab">
     <div class="grid2">
       <div class="card">
-        <h2>Plan RF</h2>
-        <form id="plan-form"></form>
-        <button id="plan-save" class="btn">Guardar plan</button>
+        <div class="card-h"><h2>Plan RF</h2><span id="plan-saved" class="muted"></span></div>
+        <p class="muted small">Valores seguros ya cargados: cable con atenuador, ganancia mínima y sesión corta. Solo faltan las dos confirmaciones humanas.</p>
+        <label class="lbl">Banda</label>
+        <div class="chips" id="band-chips"></div>
+        <div class="two">
+          <div><label class="lbl">Ganancia TX <b id="v-gain"></b> <span class="muted">(máx. 30)</span></label><input type="range" id="f-tx_gain" min="0" max="30" step="1"></div>
+          <div><label class="lbl">Duración máx. <b id="v-dur"></b> s</label><input type="range" id="f-duracion_max_s" min="30" max="600" step="30"></div>
+        </div>
+        <label class="lbl">Modo</label>
+        <div class="seg" id="mode-seg"><button data-v="cable">Cable + atenuador</button><button data-v="antena">Antena</button></div>
+        <div class="two" id="att-row"><div><label class="lbl">Atenuación (dB, ≥ 60 en cable)</label><input id="f-atenuacion_db" type="number" min="0" max="120"></div>
+          <div id="ant-wrap" hidden><label class="lbl">Antena autorizada por escrito</label><label class="sw"><input type="checkbox" id="f-antena_autorizada"><span></span></label></div></div>
+        <details class="adv"><summary>Frecuencias (calculadas por banda, editables)</summary>
+          <div class="three"><div><label class="lbl">EARFCN</label><input id="f-earfcn"></div><div><label class="lbl">Bajada (Hz)</label><input id="f-dl_freq_hz"></div><div><label class="lbl">Subida (Hz)</label><input id="f-ul_freq_hz"></div></div>
+          <p class="muted small">Son valores de ejemplo para la banda. La portadora definitiva sale del barrido de espectro.</p></details>
+        <div class="gates">
+          <div class="gate"><div><b>Portadora libre</b><span class="muted small">Hice el barrido y no hay señales reales ahí.</span></div><label class="sw"><input type="checkbox" id="f-portadora_libre"><span></span></label></div>
+          <div class="gate col"><div><b>Autorizado por</b><span class="muted small">Docente y fecha (ej.: «Ing. Pérez, 2026-11-10»).</span></div><input id="f-autorizado_por" placeholder="Nombre y fecha" autocomplete="off"></div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Comprobaciones</h2>
+
+      <div class="card center">
+        <div class="card-h"><h2>Transmisión</h2></div>
         <ul id="checks" class="checks"></ul>
-        <h2>Transmisión</h2>
-        <p id="radio-msg" class="muted"></p>
-        <div id="radio-run" hidden>
-          <p><b>Transmitiendo.</b> Corte automático en <span id="countdown">--</span> s.</p>
-          <button id="radio-stop" class="btn danger">Detener ahora</button>
+        <div class="ring-wrap">
+          <svg id="ring" viewBox="0 0 220 220" aria-hidden="true">
+            <circle class="ring-bg" cx="110" cy="110" r="96"/><circle id="ring-fg" class="ring-fg" cx="110" cy="110" r="96" pathLength="100"/>
+            <g class="waves"><circle cx="110" cy="110" r="30"/><circle cx="110" cy="110" r="30"/><circle cx="110" cy="110" r="30"/></g>
+          </svg>
+          <button id="tx-btn" class="tx" disabled><span id="tx-main">Mantén para activar</span><small id="tx-sub"></small></button>
         </div>
-        <div id="radio-idle">
-          <label>Escribe <b>EMITIR</b> para activar
-            <input id="confirm" autocomplete="off" placeholder="EMITIR"></label>
-          <button id="radio-start" class="btn danger">Activar transmisión</button>
-        </div>
+        <p id="radio-msg" class="muted small"></p>
+        <p class="muted small">Seguridad: se exige plan válido y mantener pulsado 1,5 s; corta solo al cumplirse la duración.</p>
       </div>
     </div>
-    <div class="card"><h2>Sesiones</h2><table id="sessions"></table></div>
+    <div class="card"><div class="card-h"><h2>Sesiones</h2></div><div class="tw"><table id="sessions"></table></div></div>
   </section>
 
+  <!-- DISPOSITIVO -->
   <section id="dispositivo" class="tab">
     <div class="card">
-      <div class="row">
-        <label>Dispositivo <select id="dev-select"></select></label>
-        <span id="dev-badge" class="pill off">sin datos</span>
-      </div>
-      <div id="metrics" class="metrics"></div>
-      <svg id="chart" viewBox="0 0 400 100" preserveAspectRatio="none"></svg>
-      <p class="muted" id="chart-label"></p>
+      <div class="card-h"><div class="row"><h2>Telemetría</h2>
+        <select id="dev-select" aria-label="Dispositivo"></select></div>
+        <span id="dev-badge" class="pill off"><span class="dot"></span><span>sin datos</span></span></div>
+      <div class="gauges" id="gauges"></div>
+      <div class="chart-wrap"><svg id="chart" viewBox="0 0 640 220"></svg><div id="chart-tip" class="tip" hidden></div></div>
+      <div class="legend"><span><i class="lg t"></i>Temperatura °C</span><span><i class="lg h"></i>Humedad %</span><span class="muted" id="chart-label"></span></div>
     </div>
     <div class="grid2">
       <div class="card">
-        <h2>Control</h2>
-        <div class="row"><button id="led-on" class="btn">Encender LED</button>
-          <button id="led-off" class="btn secondary">Apagar LED</button></div>
-        <div class="row"><label>Intervalo de envío (s)
-          <input id="interval" type="number" min="5" max="86400" value="60"></label>
-          <button id="interval-set" class="btn secondary">Aplicar</button></div>
-        <p class="muted">Las órdenes llegan al módulo cuando este despierta (con PSM puede tardar).</p>
+        <div class="card-h"><h2>Control del módulo</h2></div>
+        <div class="bulb-row">
+          <button id="bulb" class="bulb" aria-label="LED"><svg viewBox="0 0 64 80"><path class="glass" d="M32 4C18 4 8 14 8 27c0 9 5 14 9 19 3 4 4 7 4 11h22c0-4 1-7 4-11 4-5 9-10 9-19C56 14 46 4 32 4z"/><rect class="base" x="21" y="60" width="22" height="6" rx="2"/><rect class="base" x="25" y="68" width="14" height="6" rx="2"/></svg></button>
+          <div><b id="bulb-state">LED</b><p class="muted small">Pulsa la bombilla: la orden va por MQTT hasta el ESP32 (GPIO 2).</p></div>
+        </div>
+        <label class="lbl">Intervalo de envío <b id="v-int"></b></label>
+        <input type="range" id="interval" min="5" max="3600" step="5" value="60">
+        <button id="interval-set" class="btn secondary">Aplicar intervalo</button>
+        <p class="muted small">Las órdenes llegan cuando el módulo despierta (con PSM puede tardar).</p>
       </div>
-      <div class="card"><h2>Eventos</h2><ul id="events" class="events"></ul></div>
+      <div class="card"><div class="card-h"><h2>Eventos</h2></div><ul id="events" class="events"></ul></div>
     </div>
   </section>
 
+  <!-- NÚCLEO -->
   <section id="nucleo" class="tab">
+    <div class="card"><div class="card-h"><h2>Contenedores</h2><span id="core-err" class="muted small"></span></div><div id="containers" class="cgrid"></div></div>
     <div class="grid2">
-      <div class="card"><h2>Contenedores</h2><ul id="containers" class="checks"></ul></div>
-      <div class="card"><h2>Suscriptores</h2><table id="subs"></table>
-        <p class="muted">Las claves (Ki, OPc) nunca se muestran aquí. Se gestionan en la WebUI de Open5GS.</p></div>
+      <div class="card"><div class="card-h"><h2>Suscriptores</h2></div><div class="tw"><table id="subs"></table></div>
+        <p class="muted small">Ki y OPc nunca se muestran. Se gestionan en la WebUI de Open5GS.</p></div>
+      <div class="card"><div class="card-h"><h2>Registro en vivo</h2><select id="log-select" aria-label="Contenedor"></select></div>
+        <pre id="log-view" class="log">Elige un contenedor.</pre></div>
     </div>
-    <p id="core-err" class="muted"></p>
+  </section>
+
+  <!-- GUÍA -->
+  <section id="guia" class="tab">
+    <div class="split"><ul id="guide-list" class="list"></ul><article id="guide-body" class="md"></article></div>
   </section>
 </main>
+<div id="toasts" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
 </html>
