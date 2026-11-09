@@ -19,6 +19,23 @@ ESP32 ──UART (AT)── Módulo NB-IoT ~~ antena ~~ USRP (eNB) ── UTP �
 | 6 | PSM, eDRX y consumo | Pendiente |
 | 7 | Informe y demostración | Pendiente |
 
+## Qué falta
+
+El software está listo hasta donde se puede sin hardware. Lo que queda depende de cosas externas:
+
+| Falta | De qué depende | Fase |
+|---|---|---|
+| Autorización escrita (banda, potencia, cable o antena) y `data/rf-plan.yaml` completo | Docente | 0 |
+| Modelo de USRP; si es USB, pasar `/dev/bus/usb` al contenedor y confirmar el `tx_gain` | Laboratorio | 3 |
+| Barrido de espectro, elegir portadora libre y comprobar que el eNB emite NB-IoT (punto de decisión del plan) | USRP + analizador | 3 |
+| SIM programable y lector PC/SC; alta de IMSI/Ki/OPc en la WebUI | Compra o laboratorio | 4 |
+| Módulo NB-IoT (SIM7080G/BG96) con la banda confirmada; que el attach funcione con OAI + Open5GS (riesgo documentado) | Compra | 4 |
+| Probar el firmware del ESP32 en hardware real | Módulo + ESP32 | 5 |
+| PSM/eDRX, medición de consumo (INA226 u otro instrumento) | Hardware | 6 |
+| Capturas de Wireshark, tabla de consumos, informe y demostración | Todo lo anterior | 7 |
+
+Sin resolver aún en software: la vista del panel no se revisó visualmente en un navegador, y el panel no tiene todavía módulos de consumo, consola AT ni captura S1.
+
 ## Requisitos
 
 Docker con Compose v2 (y unos 10 GB libres en disco para las imágenes; la de OAI sola ocupa varios GB). Para las fases con radio real, además un USRP y el módulo con su SIM.
