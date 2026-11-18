@@ -202,3 +202,8 @@ Emitir en banda celular está regulado, así que la radio nace apagada y cada em
 Además: el eNB solo arranca desde el panel (`docker start` del contenedor ya creado), se apaga al reiniciarse el panel, y cada sesión queda en `data/logs/rf-sessions.csv` (fecha, banda, modo, ganancia, duración, resultado). El script valida que el plan esté completo; **no mide potencia**, eso se comprueba con un analizador de espectro.
 
 Seguridad del panel: monta `/var/run/docker.sock` para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
+
+
+## 10. Simulación sin hardware
+
+Sin USRP ni ESP32, el panel distingue lo físico de lo simulado (ver `docs/panel.md` §4.3–4.5): el núcleo es real; la radio puede ser virtual (srsRAN, perfil `sim`) y el dispositivo lo emula `fake_device.py`, que publica telemetría inventada directo al broker. Valida broker, panel y comandos, no el registro de la SIM ni el túnel por el núcleo. Los `epoll failed (EINTR)` de los registros de Open5GS son ruido conocido y no afectan.

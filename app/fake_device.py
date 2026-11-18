@@ -27,5 +27,5 @@ c.loop_start()
 while True:
     c.publish(f"nb/{did}/telemetry", json.dumps({
         "temp": round(22 + random.uniform(-1.5, 1.5), 1), "hum": round(55 + random.uniform(-5, 5), 1),
-        "rssi": random.randint(-110, -80), "led": state["led"]}), qos=1)
+        "rssi": random.randint(-110, -80), "led": state["led"], "sim": True}), qos=1)
     time.sleep(state["interval"])

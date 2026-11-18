@@ -121,10 +121,35 @@ Los módulos se enganchan con `window.onTab(nombre)` (al cambiar de pestaña) y 
 | Núcleo | `/api/core`, `/api/logs` | detalle por componente, filtro de capas, attach paso a paso |
 | eNB (OAI) | `/api/enb` | detalle por capa, recorridos de bajada/subida, secuencia de arranque |
 | Radio | `/api/radio*` | plan RF, botón de mantener pulsado (1,5 s), historial |
-| Dispositivo | SSE, `/api/devices` | telemetría, LED, intervalo |
+| Dispositivo | SSE, `/api/devices` | telemetría, LED, intervalo; tarjeta «Equipos físicos» (PC, USRP, ESP32) y explicación de la simulación |
 | Ayuda | `/api/guide*` | guías por fase |
 
 La barra superior fija muestra tres indicadores: contenedores del núcleo activos, dispositivo en línea y RF (apagada o emitiendo).
+
+### 4.3 Real o simulado
+
+`hwState()` en `app.js` decide para cada equipo si está apagado (`off`), físico (`real`) o simulado (`sim`) y `renderHw()` lo pinta en la tarjeta «Equipos físicos» de la pestaña Dispositivo (LED gris, verde o azul):
+
+| Equipo | Físico (verde) | Simulado (azul) |
+|---|---|---|
+| PC · núcleo | todos los contenedores del núcleo activos | — |
+| USRP · radio | `nb-enb-nbiot` en marcha (solo se mantiene si UHD encuentra el USRP; si no, sale con «No USRP Device Found») | `nb-enb` (srsRAN con radio virtual) |
+| ESP32 + módulo | dispositivo en línea sin `sim` en la telemetría | telemetría con `"sim": true` o `nb-ue` en marcha |
+
+`fake_device.py` añade `"sim": true` a cada lectura; el firmware real no lo envía. Con eso la insignia del dispositivo y su tarjeta se ven azules («simulado · en línea»).
+
+### 4.4 Qué simula `fake_device.py` y qué no
+
+Es un proceso Python que corre dentro de `nb-app` (`docker compose exec app python fake_device.py esp32-sim`). Se conecta a Mosquitto con las credenciales MQTT, publica `online` retenido en `nb/<id>/status` (con `offline` como last will), emite cada 5 s en `nb/<id>/telemetry` valores **inventados** (temperatura 22 ± 1,5 °C, humedad 55 ± 5 %, RSSI entre −110 y −80 dBm) y atiende `nb/<id>/cmd` (LED e intervalo, ida y vuelta real por MQTT).
+
+- **Sí prueba:** broker, panel, gráficas, comandos y eventos SSE.
+- **No prueba:** attach de la SIM, autenticación, radio NB-IoT, eNB ni el túnel de datos por el núcleo. El simulador entra directo al broker por la red de Docker, sin pasar por el PGW-U.
+
+### 4.5 Registros de los componentes del núcleo
+
+Al pulsar un nodo del diagrama de Resumen se muestran las últimas 14 líneas de `GET /api/logs/{contenedor}`. Es solo lectura, se carga una vez y no es una consola interactiva. Los nodos sin contenedor real (el dispositivo) no muestran registro.
+
+**`epoll failed (4:Interrupted system call)`:** aparece de forma esporádica en casi todas las funciones de Open5GS (p. ej. el PGW-U/UPF: `[core] ERROR: epoll failed … ogs-epoll.c:221`). Es `EINTR`: una señal interrumpió la espera del bucle de eventos (pausa de la VM o del contenedor, suspensión del equipo, `docker exec`). Open5GS lo registra como ERROR, pero es inofensivo: no hay reinicios ni pérdida de la asociación PFCP. Preocupan, en cambio, líneas de pérdida o tiempo agotado de PFCP/S1 o reinicios del contenedor.
 
 ## 5. Seguridad
 

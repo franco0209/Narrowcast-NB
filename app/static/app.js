@@ -137,7 +137,29 @@ function renderChips() {
   const run = coreData.containers.filter((c) => c.status === "running" && c.name !== "nb-enb-nbiot" && c.name !== "nb-enb").length;
   const cp = $("#core-pill"); cp.className = "pill " + (total && run >= total ? "on" : "off"); $("#core-pill-t").textContent = `Núcleo ${run}/${total || "-"}`;
   const on = Object.entries(devices).filter(([, d]) => d.online).length;
-  const dp = $("#dev-pill"); dp.className = "pill " + (on ? "on" : "off"); $("#dev-pill-t").textContent = on ? "Dispositivo en línea" : "Sin dispositivo";
+  const hw = hwState(), dp = $("#dev-pill");
+  dp.className = "pill " + (hw.esp.s === "sim" ? "sim" : on ? "on" : "off");
+  $("#dev-pill-t").textContent = hw.esp.s === "sim" ? "Dispositivo simulado" : on ? "Dispositivo en línea" : "Sin dispositivo";
+  renderHw();
+}
+// Equipos físicos: off = no hay, real = hardware conectado, sim = simulación.
+function hwState() {
+  const m = cmap(), up = (n) => m[n] === "running";
+  const core = coreData.containers.filter((c) => c.name !== "nb-subscriber-provisioner" && c.name !== "nb-enb-nbiot" && c.name !== "nb-enb" && c.name !== "nb-ue");
+  const run = core.filter((c) => c.status === "running").length;
+  const pc = { s: core.length && run === core.length ? "real" : "off", t: core.length ? `Núcleo ${run}/${core.length} contenedores` : "Núcleo apagado" };
+  // nb-enb-nbiot solo se queda en marcha si UHD encontró el USRP (si no, sale con «No USRP Device Found»).
+  const usrp = up("nb-enb-nbiot") ? { s: "real", t: "Conectado · eNB OAI en marcha" }
+    : up("nb-enb") ? { s: "sim", t: "Simulado · srsRAN con radio virtual" } : { s: "off", t: "No conectado" };
+  const on = Object.entries(devices).filter(([, d]) => d.online);
+  const simOn = on.filter(([, d]) => d.last?.sim), realOn = on.filter(([, d]) => !d.last?.sim);
+  const esp = realOn.length ? { s: "real", t: `En línea · ${realOn.map(([i]) => i).join(", ")}` }
+    : simOn.length || up("nb-ue") ? { s: "sim", t: `Simulado · ${simOn.map(([i]) => i).join(", ") || "srsUE"}` } : { s: "off", t: "Sin dispositivo" };
+  return { pc, usrp, esp };
+}
+function renderHw() {
+  const h = hwState();
+  [["pc", h.pc], ["usrp", h.usrp], ["esp", h.esp]].forEach(([k, v]) => { $(`#hw-${k}`).dataset.s = v.s; $(`#hw-${k}-t`).textContent = v.t; });
 }
 
 // ----------------------------------------------------------------- Radio
@@ -245,7 +267,8 @@ function renderDevice() {
   current = sel.value || ids[0] || null;
   const d = devices[current], badge = $("#dev-badge");
   if (!d) { badge.className = "pill off"; badge.lastElementChild.textContent = "sin dispositivos"; $("#gauges").innerHTML = "<p class='muted'>Aún no ha llegado telemetría. Prueba el simulador: <code>docker compose exec app python fake_device.py esp32-sim</code></p>"; $("#chart").innerHTML = ""; return; }
-  badge.className = "pill " + (d.online ? "on" : "off"); badge.lastElementChild.textContent = d.online ? "en línea" : "fuera de línea";
+  const isSim = !!(d.last && d.last.sim);
+  badge.className = "pill " + (d.online ? (isSim ? "sim" : "on") : "off"); badge.lastElementChild.textContent = d.online ? (isSim ? "simulado · en línea" : "en línea") : "fuera de línea";
   const l = d.last || {}, rssi = l.rssi, nb = typeof rssi === "number" ? Math.max(0, Math.min(5, Math.round((rssi + 113) / 12))) : 0;
   const ago = d.seen ? Math.round(Date.now() / 1000 - d.seen) : null;
   $("#gauges").innerHTML = gauge(l.temp, -10, 50, " °C", "Temperatura", "var(--accent)") + gauge(l.hum, 0, 100, " %", "Humedad", "var(--accent2)") +

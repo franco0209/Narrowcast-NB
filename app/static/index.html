@@ -87,6 +87,40 @@
   <!-- DISPOSITIVO -->
   <section id="dispositivo" class="tab">
     <div class="card">
+      <div class="card-h"><div><h2>Equipos físicos</h2><span class="muted small">Qué parte del sistema es hardware real y cuál se está simulando.</span></div>
+        <div class="legend"><span><i class="led-lg off"></i>apagado / no hay</span><span><i class="led-lg real"></i>físico conectado</span><span><i class="led-lg sim"></i>simulación</span></div></div>
+      <div class="hw" id="hw">
+        <div class="hw-tile" id="hw-pc" data-s="off">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="7" width="36" height="24" rx="3"/><path d="M17 41h14M24 31v10"/></svg>
+          <div><b>PC · núcleo</b><span id="hw-pc-t">…</span></div><i class="led"></i></div>
+        <span class="hw-link" aria-hidden="true"></span>
+        <div class="hw-tile" id="hw-usrp" data-s="off">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="20" width="38" height="18" rx="3"/><path d="M14 20V9M24 20V6M34 20V9M12 29h8M28 29h8"/><circle cx="14" cy="8" r="1.6"/><circle cx="24" cy="5" r="1.6"/><circle cx="34" cy="8" r="1.6"/></svg>
+          <div><b>USRP · radio</b><span id="hw-usrp-t">…</span></div><i class="led"></i></div>
+        <span class="hw-link" aria-hidden="true"></span>
+        <div class="hw-tile" id="hw-esp" data-s="off">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="12" width="30" height="24" rx="3"/><path d="M15 12V6M21 12V6M27 12V6M33 12V6M15 36v6M21 36v6M27 36v6M33 36v6"/><rect x="17" y="19" width="14" height="10" rx="1.5"/></svg>
+          <div><b>ESP32 + módulo</b><span id="hw-esp-t">…</span></div><i class="led"></i></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>¿Cómo se simula ahora?</h2></div>
+      <p class="small">No hay USRP ni ESP32 conectados, así que los datos de esta pestaña los genera un programa: <code>fake_device.py</code>, un proceso Python que se ejecutó dentro del contenedor <code>nb-app</code>. Hace lo mismo que el firmware real desde el punto de vista de MQTT, pero se salta toda la parte de radio.</p>
+      <div class="flow"><b>Real</b><span>ESP32</span><span>Módulo NB-IoT</span><span>USRP · radio</span><span>eNB</span><span>Núcleo (MME · SGW · PGW)</span><span>Mosquitto</span><span>Panel</span></div>
+      <div class="flow sim"><b>Simulado</b><span class="skip">ESP32</span><span class="skip">Módulo NB-IoT</span><span class="skip">USRP · radio</span><span class="skip">eNB</span><span class="skip">Núcleo</span><span>fake_device.py</span><span>Mosquitto</span><span>Panel</span></div>
+      <div class="grid2 inner">
+        <div><b>Qué hace el simulador</b><ul class="small">
+          <li>Se conecta a Mosquitto con las mismas credenciales MQTT y se anuncia en <code>nb/esp32-sim/status</code> («online», retenido; «offline» automático si se corta).</li>
+          <li>Publica en <code>nb/esp32-sim/telemetry</code> cada 5 s (o el intervalo que le pongas): temperatura 22 ± 1,5 °C, humedad 55 ± 5 % y RSSI aleatorio entre −110 y −80 dBm. <b>Son valores inventados.</b></li>
+          <li>Escucha <code>nb/esp32-sim/cmd</code>: la bombilla y el intervalo funcionan de verdad (ida y vuelta por MQTT) y el estado del LED vuelve en la siguiente lectura.</li></ul></div>
+        <div><b>Qué prueba y qué no</b><ul class="small">
+          <li><b>Sí:</b> el broker, el panel, las gráficas, los comandos y los eventos.</li>
+          <li><b>No:</b> el registro (attach) de la SIM, la autenticación, la radio NB-IoT, el eNB ni el túnel de datos por el núcleo. El simulador entra directo al broker por la red de Docker, sin pasar por el PGW-U.</li>
+          <li>Se reconoce porque su telemetría lleva <code>"sim": true</code>: con eso la tarjeta se ve azul. El firmware real no lo envía y aparece en verde.</li>
+          <li>Para detenerlo, Ctrl+C en la terminal donde lo lanzaste.</li></ul></div>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-h"><div class="row"><h2>Telemetría</h2>
         <select id="dev-select" aria-label="Dispositivo"></select></div>
         <span id="dev-badge" class="pill off"><span class="dot"></span><span>sin datos</span></span></div>
