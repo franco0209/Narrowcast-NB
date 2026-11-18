@@ -52,7 +52,7 @@ services:
     networks: { epc: { ipv4_address: 10.44.0.5 } }
     restart: unless-stopped
 
-  # Panel de control (guía, radio, dispositivo, núcleo). Monta el socket de Docker para
+  # Panel de control (resumen, suscriptores, núcleo, eNB, radio, dispositivo, ayuda). Monta el socket de Docker para
   # encender/apagar el eNB: solo escucha en 127.0.0.1.
   app:
     image: ${APP_IMAGE:-narrowcast-nb/app:local}

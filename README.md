@@ -46,7 +46,7 @@ Parámetros de la red: PLMN `001/01`, TAC `1`, APN `internet`, subred de UE `10.
 | Broker MQTT | `mosquitto/` | Mensajería entre el dispositivo y el panel. |
 | Panel de control | `app/` | Pestañas Resumen, Suscriptores, Núcleo, eNB, Radio, Dispositivo y Ayuda; simulador de dispositivo (`fake_device.py`). |
 | Firmware | `firmware/esp32-nbiot/` | Código del ESP32 (Arduino/PlatformIO): módem por AT, sensor DHT22, LED y MQTT. |
-| Documentación | `docs/` | Plan del proyecto, etapas, guías del panel y presentación de avance. |
+| Documentación | `docs/` | Arquitectura, panel, Docker y compilación, etapas, plan del proyecto, guías del panel y presentación de avance. |
 
 ### Panel de control
 
@@ -63,6 +63,17 @@ Interfaz en <http://127.0.0.1:8080> que sigue el tema claro/oscuro del sistema.
 Una barra superior fija muestra siempre el estado del núcleo, del dispositivo y de la RF.
 
 El panel monta el socket de Docker para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
+
+## Documentación
+
+| Documento | Contenido |
+|---|---|
+| [`docs/arquitectura.md`](docs/arquitectura.md) | Capas, red y direccionamiento, partes de Open5GS y OpenAirInterface que se usan, interfaces y protocolos, suscriptores, MQTT, firmware y seguridad de RF |
+| [`docs/panel.md`](docs/panel.md) | Diseño técnico del panel: API REST, eventos SSE, motor de diagramas, seguridad y cómo extenderlo |
+| [`docs/docker-y-compilacion.md`](docs/docker-y-compilacion.md) | Lenguajes, imágenes, compilación de Open5GS/OAI/srsRAN, perfiles de Compose, variables y comandos |
+| [`docs/etapas.md`](docs/etapas.md) | Fases del proyecto, estado, lo que falta, guía de puesta en marcha y problemas frecuentes |
+| [`docs/PLAN Narrowcast-NB.md`](docs/PLAN%20Narrowcast-NB.md) | Plan original del proyecto |
+| [`docs/Narrowcast-NB-avance.pptx`](docs/Narrowcast-NB-avance.pptx) | Presentación de avance |
 
 ## Estado
 
