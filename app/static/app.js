@@ -29,7 +29,8 @@ function openTab(name) {
   $$("#tabs button,.tab").forEach((e) => e.classList.remove("active"));
   $(`#tabs [data-tab=${name}]`).classList.add("active"); $("#" + name).classList.add("active");
   history.replaceState(null, "", "#" + name);
-  if (name === "nucleo" || name === "resumen") refreshCore();
+  if (name === "resumen") refreshCore();
+  window.onTab?.(name);
   if (name === "radio") loadRadio(true);
   if (name === "dispositivo") renderDevice();
 }
@@ -49,7 +50,7 @@ async function loadGuide() {
 
 // ------------------------------------------------------- Resumen: mapa de red
 const NODES = [
-  { id: "dev", label: "ESP32 + módulo", sub: "UE NB-IoT", x: 10, y: 177, ct: null, info: "El dispositivo: un ESP32 que controla el módulo NB-IoT (SIM7080G/BG96) por comandos AT. Lee un sensor, envía los datos por radio y obedece órdenes (LED, intervalo).", links: ["Uu (radio) con el eNB", "MQTT hasta el broker, a través de la red"] },
+  { id: "dev", label: "ESP32", sub: "módulo NB-IoT (UE)", x: 10, y: 177, ct: null, info: "El dispositivo: un ESP32 que controla el módulo NB-IoT (SIM7080G/BG96) por comandos AT. Lee un sensor, envía los datos por radio y obedece órdenes (LED, intervalo).", links: ["Uu (radio) con el eNB", "MQTT hasta el broker, a través de la red"] },
   { id: "enb", label: "eNB NB-IoT", sub: "OAI + USRP", x: 190, y: 177, ct: ["nb-enb-nbiot", "nb-enb"], ip: "10.44.0.40", info: "La estación base. En modo real es OpenAirInterface con un USRP que emite la portadora NB-IoT; en el modo simulado es srsRAN con radio virtual. Convierte la radio en tráfico IP hacia el núcleo.", links: ["S1-MME (SCTP 36412) hacia el MME", "S1-U (GTP-U 2152) hacia el SGW-U"] },
   { id: "mme", label: "MME", sub: "registro y paging", x: 390, y: 40, ct: ["nb-mme"], ip: "10.44.0.10", info: "Recepcionista de la red: acepta al eNB (S1 Setup), autentica al módulo, aplica PLMN/TAC y gestiona el attach.", links: ["S1-MME con el eNB", "S6a (Diameter) con el HSS", "S11 (GTP-C) con el SGW-C"] },
   { id: "hss", label: "HSS", sub: "IMSI, Ki, OPc", x: 580, y: 40, ct: ["nb-hss"], ip: "10.44.0.11", info: "Libreta de suscriptores: guarda IMSI y claves y entrega los vectores de autenticación al MME.", links: ["S6a con el MME", "Lee suscriptores de MongoDB"] },
@@ -60,8 +61,8 @@ const NODES = [
   { id: "sgwu", label: "SGW-U", sub: "datos (túnel S1-U)", x: 390, y: 224, ct: ["nb-sgwu"], ip: "10.44.0.13", info: "Reenvía los paquetes de usuario entre el eNB (GTP-U) y el PGW-U.", links: ["S1-U con el eNB", "S5-U con el PGW-U"] },
   { id: "pgwu", label: "PGW-U / UPF", sub: "salida SGi", x: 580, y: 224, ct: ["nb-pgwu"], ip: "10.44.0.15", info: "Saca el tráfico del túnel hacia la red de datos: aquí nacen las IP 10.58.x.x y se enruta hacia el broker MQTT.", links: ["S5-U con el SGW-U", "SGi hacia la red de datos"] },
   { id: "mosq", label: "Mosquitto", sub: "broker MQTT", x: 770, y: 224, ct: ["nb-mosquitto"], ip: "10.44.0.5", info: "Broker MQTT. El ESP32 publica en nb/<id>/telemetry y escucha en nb/<id>/cmd.", links: ["SGi desde el PGW-U", "Panel (suscriptor/publicador)"] },
-  { id: "app", label: "Panel", sub: "esta interfaz", x: 770, y: 318, ct: ["nb-app"], ip: "10.44.0.6", info: "Este panel: lee MQTT, ordena al eNB encenderse (con las reglas RF) y consulta MongoDB y Docker.", links: ["MQTT con Mosquitto", "Docker (arranca/para el eNB)", "MongoDB (solo lectura de IMSI/APN)"] },
-  { id: "webui", label: "WebUI Open5GS", sub: "alta de SIM", x: 390, y: 318, ct: ["nb-webui"], ip: "10.44.0.4", info: "Interfaz oficial de Open5GS para registrar suscriptores (IMSI, Ki, OPc). Escribe en MongoDB.", links: ["MongoDB"] },
+  { id: "app", label: "Panel", sub: "esta interfaz", x: 770, y: 318, ct: ["nb-app"], ip: "10.44.0.6", info: "Este panel: lee MQTT, ordena al eNB encenderse (con las reglas RF), gestiona los suscriptores en MongoDB y consulta Docker.", links: ["MQTT con Mosquitto", "Docker (arranca/para el eNB)", "MongoDB (alta, edición y baja de suscriptores)"] },
+  { id: "webui", label: "WebUI", sub: "respaldo · Open5GS", x: 390, y: 318, ct: ["nb-webui"], ip: "10.44.0.4", info: "Interfaz oficial de Open5GS para registrar suscriptores (IMSI, Ki, OPc). Queda como respaldo: el módulo Suscriptores de este panel escribe en la misma base de datos.", links: ["MongoDB"] },
 ];
 const EDGES = [
   ["dev", "enb", "radio", "Uu (radio)"], ["enb", "mme", "ctrl", "S1-MME"], ["enb", "sgwu", "user", "S1-U"],
@@ -70,27 +71,14 @@ const EDGES = [
   ["pgwc", "pgwu", "ctrl", "PFCP"], ["sgwu", "pgwu", "user", "S5-U"], ["pgwu", "mosq", "user", "SGi"],
   ["mosq", "app", "user", "MQTT"],
 ];
-const NW = 130, NH = 46;
+const EDGE_OBJS = EDGES.map(([a, b, kind, label]) => ({ a, b, kind, label }));
+const ICON_OF = { dev: "ue", enb: "tower", mme: "ctrl", hss: "key", mongo: "db", sgwc: "route", pgwc: "route", pcrf: "shield", sgwu: "layers", pgwu: "layers", mosq: "cloud", app: "panel", webui: "doc" };
 const nodeBy = Object.fromEntries(NODES.map((n) => [n.id, n]));
-let selNode = null;
+let selNode = null, topoDg = null;
 function buildTopo() {
-  const svg = $("#topo"); svg.innerHTML = "";
-  const eg = svgEl("g", {}, svg), ng = svgEl("g", {}, svg);
-  EDGES.forEach(([a, b, kind, label], i) => {
-    const A = nodeBy[a], B = nodeBy[b];
-    const x1 = A.x + NW / 2, y1 = A.y + NH / 2, x2 = B.x + NW / 2, y2 = B.y + NH / 2;
-    svgEl("line", { x1, y1, x2, y2, class: "edge " + kind, "data-e": i }, eg);
-    const t = svgEl("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 6, class: "elabel" }, eg); t.textContent = label;
-  });
-  NODES.forEach((n) => {
-    const g = svgEl("g", { class: "node down", "data-n": n.id, transform: `translate(${n.x},${n.y})`, tabindex: 0, role: "button" }, ng);
-    svgEl("rect", { width: NW, height: NH, rx: 11 }, g);
-    svgEl("circle", { cx: 14, cy: 14, r: 4, class: "led" }, g);
-    svgEl("text", { x: NW / 2 + 6, y: 20 }, g).textContent = n.label;
-    svgEl("text", { x: NW / 2, y: 35, class: "sub" }, g).textContent = n.sub;
-    const pick = () => selectNode(n.id);
-    g.onclick = pick; g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") pick(); };
-  });
+  const nodes = NODES.map((n) => ({ id: n.id, label: n.label, sub: n.sub, x: n.x, y: n.y, w: 140, h: 48, icon: ICON_OF[n.id], ext: n.id === "dev" }));
+  topoDg = makeDiagram($("#topo"), { nodes, edges: EDGE_OBJS, w: 960, h: 400, onSelect: selectNode });
+  topoDg.ambient(true);
 }
 let coreData = { containers: [], subscribers: [], error: null };
 const cmap = () => Object.fromEntries(coreData.containers.map((c) => [c.name, c.status]));
@@ -100,17 +88,18 @@ function nodeUp(n) {
   const m = cmap(); return (n.ct || []).some((c) => m[c] === "running");
 }
 function updateTopo() {
+  if (!topoDg) return;
   const up = {};
-  NODES.forEach((n) => { up[n.id] = nodeUp(n); const g = $(`[data-n=${n.id}]`); g.classList.toggle("up", up[n.id]); g.classList.toggle("down", !up[n.id]); });
+  NODES.forEach((n) => { up[n.id] = nodeUp(n); topoDg.setNodeUp(n.id, up[n.id]); });
   const online = anyOnline();
   EDGES.forEach(([a, b, kind], i) => {
     let live = up[a] && up[b];
     if (kind === "user") live = live && online; if (kind === "radio") live = online && up.enb;
-    $(`[data-e="${i}"]`).classList.toggle("live", live);
+    topoDg.setLive(i, live);
   });
 }
 async function selectNode(id) {
-  selNode = id; $$(".node").forEach((g) => g.classList.toggle("sel", g.dataset.n === id));
+  selNode = id; topoDg.select(id);
   const n = nodeBy[id], up = nodeUp(n), box = $("#node-info");
   box.innerHTML = `<h3>${esc(n.label)} <span class="pill ${up ? "on" : "off"}"><span class="dot"></span>${up ? "activo" : "apagado"}</span></h3>
     <p>${esc(n.info)}</p><div>${(n.links || []).map((l) => `<span class="tag">${esc(l)}</span>`).join("")}${n.ip ? `<span class="tag">IP ${n.ip}</span>` : ""}</div>`;
@@ -137,32 +126,19 @@ function renderKpis() {
   $("#kpis").innerHTML = k.map(([b, s, c]) => `<div class="kpi ${c}"><b>${esc(b)}</b><span>${s}</span></div>`).join("");
 }
 
-// ---------------------------------------------------------------- Núcleo
+// ------------------------------------------------------------ Estado del núcleo
 async function refreshCore() {
   try { coreData = await api("/api/core"); } catch (e) { return; }
-  updateTopo(); renderKpis();
-  if (activeTab() === "nucleo") renderCore();
+  updateTopo(); renderKpis(); renderChips(); window.onCore?.();
 }
-function renderCore() {
-  $("#containers").innerHTML = coreData.containers.map((c) =>
-    `<div class="cbox ${c.status === "running" ? "up" : (c.status === "exited" || c.status === "created") ? "idle" : ""}" data-c="${esc(c.name)}"><span class="d"></span><div><b>${esc(c.name.replace("nb-", ""))}</b><small>${esc(c.status)}</small></div></div>`).join("") || "<p class='muted'>sin datos</p>";
-  $$(".cbox").forEach((b) => b.onclick = () => { $("#log-select").value = b.dataset.c; loadLog(); });
-  const sel = $("#log-select"), names = coreData.containers.map((c) => c.name);
-  if ([...sel.options].map((o) => o.value).join() !== names.join()) { const cur = sel.value; sel.innerHTML = names.map((n) => `<option>${esc(n)}</option>`).join(""); if (names.includes(cur)) sel.value = cur; else if (names.includes("nb-mme")) sel.value = "nb-mme"; loadLog(); }
-  $("#subs").innerHTML = "<tr><th>IMSI</th><th>APN</th></tr>" + coreData.subscribers.map((s) => `<tr><td>${esc(s.imsi)}</td><td>${esc(s.apn.join(", "))}</td></tr>`).join("");
-  $("#core-err").textContent = coreData.error || "";
-}
-async function loadLog() {
-  const n = $("#log-select").value; if (!n) return;
-  try {
-    const l = await api(`/api/logs/${n}?tail=120`), v = $("#log-view");
-    const bottom = v.scrollHeight - v.scrollTop - v.clientHeight < 30;
-    v.textContent = l.lines.join("\n") || "(sin registro)"; if (bottom) v.scrollTop = v.scrollHeight;
-  } catch (e) { $("#log-view").textContent = e.message; }
-}
-$("#log-select").onchange = loadLog;
-setInterval(() => { if (activeTab() === "nucleo") loadLog(); }, 4000);
 setInterval(refreshCore, 5000);
+function renderChips() {
+  const total = coreData.containers.filter((c) => c.name !== "nb-subscriber-provisioner" && c.name !== "nb-enb-nbiot" && c.name !== "nb-enb").length;
+  const run = coreData.containers.filter((c) => c.status === "running" && c.name !== "nb-enb-nbiot" && c.name !== "nb-enb").length;
+  const cp = $("#core-pill"); cp.className = "pill " + (total && run >= total ? "on" : "off"); $("#core-pill-t").textContent = `Núcleo ${run}/${total || "-"}`;
+  const on = Object.entries(devices).filter(([, d]) => d.online).length;
+  const dp = $("#dev-pill"); dp.className = "pill " + (on ? "on" : "off"); $("#dev-pill-t").textContent = on ? "Dispositivo en línea" : "Sin dispositivo";
+}
 
 // ----------------------------------------------------------------- Radio
 const PRESETS = { // DL de ejemplo por banda (EARFCN = N_offs + 0,1·(F − F_low)); la definitiva sale del barrido
@@ -326,7 +302,8 @@ function connect() {
   const es = new EventSource("/api/stream");
   es.onmessage = (m) => {
     const e = JSON.parse(m.data);
-    if (e.type === "hello") { devices = e.devices; setRadio(e.radio); renderDevice(); updateTopo(); renderKpis(); return; }
+    if (e.type === "subs") { if (activeTab() === "suscriptores") loadSubs(); refreshCore(); return; }
+    if (e.type === "hello") { devices = e.devices; setRadio(e.radio); renderDevice(); updateTopo(); renderKpis(); renderChips(); return; }
     if (e.type === "radio") { setRadio(e.radio); if (e.reason) { addEvent("Radio: " + e.reason); toast("Radio: " + e.reason); } loadRadio(false).catch(() => {}); return; }
     if (e.type === "telemetry") {
       const d = (devices[e.device] ||= { online: true, last: {}, history: [] });
@@ -336,7 +313,7 @@ function connect() {
       const d = (devices[e.device] ||= { online: false, last: {}, history: [] }); d.online = e.online; d.seen = e.seen;
       addEvent(`${e.device}: ${e.online ? "en línea" : "fuera de línea"}`);
     } else if (e.type === "cmd") addEvent(`→ ${e.device}: ${JSON.stringify(e.cmd)}`);
-    renderDevice(); updateTopo(); renderKpis();
+    renderDevice(); updateTopo(); renderKpis(); renderChips();
   };
 }
 

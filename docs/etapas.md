@@ -32,7 +32,7 @@ El software está listo hasta donde se puede sin hardware. Lo que queda depende 
 | PSM/eDRX, medición de consumo (INA226 u otro instrumento) | Hardware | 6 |
 | Capturas de Wireshark, tabla de consumos, informe y demostración | Todo lo anterior | 7 |
 
-Sin resolver aún en software: el panel no tiene todavía módulos de consumo, consola AT ni captura S1.
+Sin resolver aún en software: el panel no tiene todavía módulo de energía/consumo, consola AT, captura S1 ni diagnóstico guiado.
 
 ## Requisitos
 

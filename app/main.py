@@ -325,6 +325,132 @@ def core():
     return out
 
 
+# ----------------------------------------------------------- Suscriptores
+HEX = lambda n: re.compile(rf"[0-9a-fA-F]{{{n}}}")
+
+
+class SubIn(BaseModel):
+    imsi: str
+    k: Optional[str] = None      # Ki: obligatorio al crear; vacío al editar = no cambiar
+    opc: Optional[str] = None
+    amf: str = "8000"
+    sqn: str = "000000000000"
+    msisdn: str = ""
+    apn: str = "internet"
+
+
+def sub_db():
+    return MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000).get_default_database()
+
+
+def sub_check(b: SubIn, creating: bool):
+    if not re.fullmatch(r"\d{5,15}", b.imsi):
+        raise HTTPException(400, "El IMSI debe tener de 5 a 15 dígitos")
+    for name, val, n, req in (("K (Ki)", b.k, 32, creating), ("OPc", b.opc, 32, creating), ("AMF", b.amf, 4, True), ("SQN", b.sqn, 12, True)):
+        if not val and not req:
+            continue
+        if not val or not HEX(n).fullmatch(val):
+            raise HTTPException(400, f"{name} debe tener {n} caracteres hexadecimales")
+    if b.msisdn and not re.fullmatch(r"\d{3,15}", b.msisdn):
+        raise HTTPException(400, "El MSISDN debe tener de 3 a 15 dígitos")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,63}", b.apn):
+        raise HTTPException(400, "APN inválido (letras, números, punto, guion)")
+
+
+def sub_view(s: dict) -> dict:
+    """Nunca devuelve Ki ni OPc."""
+    sess = [x for sl in s.get("slice", []) for x in sl.get("session", [])]
+    return {"imsi": s["imsi"], "msisdn": (s.get("msisdn") or [""])[0], "apn": [x["name"] for x in sess],
+            "amf": s.get("security", {}).get("amf", ""), "created": str(s.get("createdAt", ""))[:19],
+            "updated": str(s.get("updatedAt", ""))[:19]}
+
+
+@app.get("/api/subscribers")
+def subs_list():
+    try:
+        return [sub_view(s) for s in sub_db().subscribers.find({}).sort("imsi", 1)]
+    except Exception as e:
+        raise HTTPException(503, f"MongoDB: {e}")
+
+
+@app.post("/api/subscribers")
+def subs_create(b: SubIn):
+    sub_check(b, True)
+    db = sub_db()
+    if db.subscribers.find_one({"imsi": b.imsi}):
+        raise HTTPException(409, "Ya existe un suscriptor con ese IMSI")
+    amb = {"uplink": {"value": 1, "unit": 3}, "downlink": {"value": 1, "unit": 3}}
+    now = datetime.now(timezone.utc)
+    db.subscribers.insert_one({
+        "imsi": b.imsi, "msisdn": [b.msisdn] if b.msisdn else [], "schema_version": 1,
+        "subscribed_rau_tau_timer": 12, "network_access_mode": 0, "subscriber_status": 0, "access_restriction_data": 32,
+        "security": {"k": b.k.upper(), "amf": b.amf.upper(), "op": None, "opc": b.opc.upper(), "sqn": b.sqn.upper()},
+        "ambr": amb,
+        "slice": [{"sst": 1, "default_indicator": True, "session": [{
+            "name": b.apn, "type": 3,
+            "qos": {"index": 9, "arp": {"priority_level": 8, "pre_emption_capability": 1, "pre_emption_vulnerability": 1}},
+            "ambr": amb, "pcc_rule": []}]}],
+        "createdAt": now, "updatedAt": now})
+    broadcast({"type": "subs"})
+    return sub_view(db.subscribers.find_one({"imsi": b.imsi}))
+
+
+@app.put("/api/subscribers/{imsi}")
+def subs_update(imsi: str, b: SubIn):
+    b.imsi = imsi
+    sub_check(b, False)
+    db = sub_db()
+    if not db.subscribers.find_one({"imsi": imsi}):
+        raise HTTPException(404, "No existe ese suscriptor")
+    sets = {"msisdn": [b.msisdn] if b.msisdn else [], "security.amf": b.amf.upper(), "slice.0.session.0.name": b.apn,
+            "updatedAt": datetime.now(timezone.utc)}
+    if b.k:
+        sets["security.k"] = b.k.upper()
+    if b.opc:
+        sets["security.opc"] = b.opc.upper()
+        sets["security.op"] = None
+    if b.sqn:
+        sets["security.sqn"] = b.sqn.upper()
+    db.subscribers.update_one({"imsi": imsi}, {"$set": sets})
+    broadcast({"type": "subs"})
+    return sub_view(db.subscribers.find_one({"imsi": imsi}))
+
+
+@app.delete("/api/subscribers/{imsi}")
+def subs_delete(imsi: str):
+    if not re.fullmatch(r"\d{5,15}", imsi):
+        raise HTTPException(400, "IMSI inválido")
+    r = sub_db().subscribers.delete_one({"imsi": imsi})
+    if not r.deleted_count:
+        raise HTTPException(404, "No existe ese suscriptor")
+    broadcast({"type": "subs"})
+    return {"deleted": imsi}
+
+
+# ------------------------------------------------------------------- eNB
+@app.get("/api/enb")
+def enb_status():
+    """Estado del eNB NB-IoT: contenedor, plan RF y si el MME lo tiene registrado (S1 Setup)."""
+    out = {"container": None, "s1_accepted": None, "plan": read_plan(), "lines": []}
+    try:
+        cl = docker.from_env()
+        try:
+            c = cl.containers.get(RADIO_CONTAINER)
+            out["container"] = c.status
+            raw = c.logs(tail=25).decode("utf-8", "replace")
+            out["lines"] = ANSI.sub("", raw).splitlines()[-25:]
+        except docker.errors.NotFound:
+            out["container"] = "no creado"
+        try:
+            mme = ANSI.sub("", cl.containers.get("nb-mme").logs(tail=400).decode("utf-8", "replace"))
+            out["s1_accepted"] = "eNB-S1 accepted" in mme
+        except Exception:
+            pass
+    except Exception as e:
+        out["error"] = f"docker: {e}"
+    return out
+
+
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 

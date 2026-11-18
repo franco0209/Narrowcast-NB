@@ -152,3 +152,45 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .still *{animation:none!important;transition:none!important}
 .gauge .bars{margin-bottom:10px}.gauge .bars+b{margin-top:0}
 .cbox.idle .d{background:var(--muted)}
+
+/* diagramas */
+.dg{width:100%;height:auto;display:block}.dg.narrow{max-width:640px;margin:0 auto}
+.edge{transition:opacity .25s,stroke-width .25s}
+.edge.off,.elabel.off{opacity:.06!important}
+.edge.hot{opacity:1;stroke-width:3.2}
+.edge.live{stroke-dasharray:none;opacity:.7;animation:none}
+.edge.radio.live{stroke-dasharray:3 6;animation:flow 1s linear infinite}
+.pkt-t{font-size:10px;fill:var(--fg);text-anchor:middle;font-weight:600}
+.elabel{paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.node.ext rect{stroke-dasharray:5 4}
+.node .icn{stroke:var(--muted);color:var(--muted)}.node.up .icn{stroke:var(--accent)}
+.node text{text-anchor:middle}
+.focusing .node{opacity:.35}.focusing .node.lit{opacity:1}.focusing .node.lit rect{stroke:var(--accent);filter:drop-shadow(0 4px 12px var(--glow))}
+.focusing .edge{opacity:.08!important}.focusing .edge.lit{opacity:1!important;stroke-width:3.4;stroke-dasharray:none}
+.focusing .elabel{opacity:.15}.focusing .elabel.lit{opacity:1}
+/* paneles de detalle y pasos */
+.grid2.wide{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}@media(max-width:520px){.grid2.wide{grid-template-columns:1fr}}
+.grid2.inner{gap:6px 24px;margin-bottom:6px}.grid2.inner p{margin:2px 0 10px}
+.grid2+.card,.grid2.wide+.grid2{margin-top:16px}
+.info h3{margin:0 0 6px;font-size:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.info h4{margin:14px 0 6px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.info p{margin:0}.ifl{list-style:none;margin:0;padding:0;font-size:13px}.ifl li{padding:3px 0;display:flex;gap:8px;align-items:center}
+.dot-k{width:10px;height:10px;border-radius:3px;flex:none;background:var(--muted)}.dot-k.ctrl{background:var(--ctrl)}.dot-k.user{background:var(--user)}.dot-k.radio{background:var(--radio)}
+.kv{font-size:13px}.kv th{width:36%;color:var(--muted);font-weight:600;vertical-align:top;white-space:normal}.kv td{white-space:normal;word-break:break-word}
+.stepper .stp-bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}.btn.sm{padding:5px 10px;font-size:12.5px}
+.stp-list{list-style:none;margin:0 0 12px;padding:0;max-height:210px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--card2)}
+.stp-list li{display:flex;gap:10px;align-items:center;padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line);transition:.15s}
+.stp-list li:last-child{border-bottom:0}.stp-list li:hover{background:var(--card)}
+.stp-list .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--line);color:var(--muted);flex:none}
+.stp-list li.done .n{background:var(--ok);color:#fff}.stp-list li.act{background:var(--glow)}.stp-list li.act .n{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.stp-detail{padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);animation:in .25s both}
+.stp-detail h3{margin:0 0 6px;font-size:15px}.stp-detail p{margin:6px 0;font-size:13.5px}.stp-detail .tech{color:var(--muted);font-size:12.5px}
+.chips-ro{display:flex;gap:6px;flex-wrap:wrap}.tag.msg{background:color-mix(in srgb,var(--accent2) 18%,transparent);color:var(--accent2)}
+.tag.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.tl{list-style:none;margin:0;padding:0;position:relative}.tl::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl li{display:flex;gap:12px;padding:6px 0;position:relative}.tl .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--card);border:2px solid var(--accent);color:var(--accent);flex:none;z-index:1}
+.tl p{margin:2px 0 4px}
+/* suscriptores */
+.acts{text-align:right}.acts .btn{margin-left:6px}.btn.danger{color:var(--bad)}
+#sub-table td{white-space:nowrap}
+label.btn{display:inline-block}
+@media(max-width:900px){nav button i{display:none}.status .pill{font-size:11.5px;padding:3px 9px}}

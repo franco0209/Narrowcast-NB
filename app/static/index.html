@@ -15,12 +15,16 @@
   </div>
   <nav id="tabs">
     <button data-tab="resumen" class="active"><i>◎</i>Resumen</button>
+    <button data-tab="suscriptores"><i>▣</i>Suscriptores</button>
+    <button data-tab="nucleo"><i>▦</i>Núcleo</button>
+    <button data-tab="enb"><i>⌁</i>eNB (OAI)</button>
     <button data-tab="radio"><i>◉</i>Radio</button>
     <button data-tab="dispositivo"><i>▤</i>Dispositivo</button>
-    <button data-tab="nucleo"><i>▦</i>Núcleo</button>
-    <button data-tab="guia"><i>≡</i>Guía</button>
+    <button data-tab="guia"><i>≡</i>Ayuda</button>
   </nav>
   <div class="status">
+    <span id="core-pill" class="pill off" title="Contenedores del núcleo"><span class="dot"></span><span id="core-pill-t">Núcleo</span></span>
+    <span id="dev-pill" class="pill off" title="Dispositivo"><span class="dot"></span><span id="dev-pill-t">Sin dispositivo</span></span>
     <span id="rf-pill" class="pill off"><span class="dot"></span><span id="rf-text">RF apagada</span></span>
     <span id="clock" class="muted"></span>
   </div>
@@ -33,7 +37,7 @@
     <div class="card topo-card">
       <div class="card-h"><h2>Mapa de la red</h2>
         <div class="legend"><span><i class="lg ctrl"></i>señalización</span><span><i class="lg user"></i>datos de usuario</span><span><i class="lg radio"></i>radio</span></div></div>
-      <svg id="topo" viewBox="0 0 960 400" role="img" aria-label="Diagrama de la red"></svg>
+      <svg id="topo" class="dg" viewBox="0 0 960 400" role="img" aria-label="Diagrama de la red"></svg>
       <div id="node-info" class="node-info"><p class="muted">Haz clic en un elemento del mapa para ver qué hace, con qué se conecta y su registro.</p></div>
     </div>
   </section>
@@ -106,14 +110,77 @@
     </div>
   </section>
 
+  <!-- SUSCRIPTORES -->
+  <section id="suscriptores" class="tab">
+    <div class="card">
+      <div class="card-h"><div><h2>Suscriptores (SIM)</h2><span id="sub-count" class="muted small"></span></div>
+        <div class="row"><label class="btn secondary" for="sub-csv">Importar CSV</label><input type="file" id="sub-csv" accept=".csv,.txt" hidden>
+          <button id="sub-new" class="btn">Nuevo suscriptor</button></div></div>
+      <div class="tw"><table id="sub-table"></table></div>
+      <p class="muted small">Ki y OPc nunca se muestran. El CSV lleva una línea por SIM: <code>imsi,k,opc[,msisdn,apn]</code>.</p>
+    </div>
+    <div class="card" id="sub-form" hidden>
+      <div class="card-h"><h2 id="sub-form-title">Nuevo suscriptor</h2><button id="sub-gen" class="btn secondary">Generar K y OPc aleatorios</button></div>
+      <div class="two"><div><label class="lbl" for="sf-imsi">IMSI (15 dígitos: PLMN 001/01 + número)</label><input id="sf-imsi" inputmode="numeric" placeholder="001010000000001" autocomplete="off"></div>
+        <div><label class="lbl" for="sf-msisdn">MSISDN (opcional)</label><input id="sf-msisdn" inputmode="numeric" autocomplete="off"></div></div>
+      <div class="two"><div><label class="lbl" for="sf-k">K / Ki (32 hex)</label><input id="sf-k" autocomplete="off" spellcheck="false"></div>
+        <div><label class="lbl" for="sf-opc">OPc (32 hex)</label><input id="sf-opc" autocomplete="off" spellcheck="false"></div></div>
+      <div class="three"><div><label class="lbl" for="sf-amf">AMF (4 hex)</label><input id="sf-amf" value="8000" autocomplete="off"></div>
+        <div><label class="lbl" for="sf-sqn">SQN (12 hex)</label><input id="sf-sqn" value="000000000000" autocomplete="off"></div>
+        <div><label class="lbl" for="sf-apn">APN</label><input id="sf-apn" value="internet" autocomplete="off"></div></div>
+      <div class="row" style="margin-top:14px"><button id="sub-save" class="btn">Guardar</button><button id="sub-cancel" class="btn secondary">Cancelar</button></div>
+    </div>
+    <div class="card"><div class="card-h"><h2>Cómo se usa cada dato</h2></div>
+      <div class="grid2 inner">
+        <div><b>IMSI</b><p class="muted small">Identidad de la SIM. Debe empezar por el PLMN de la red (001 01). El MME lo recibe en el Attach y lo envía al HSS.</p></div>
+        <div><b>K y OPc</b><p class="muted small">Claves secretas compartidas entre la SIM y el HSS. Con ellas se calcula la autenticación mutua; deben ser idénticas a las programadas en la SIM.</p></div>
+        <div><b>AMF y SQN</b><p class="muted small">AMF forma parte del token de autenticación (8000 es el valor habitual). SQN es un contador anti-repetición que el HSS avanza solo; solo se edita para resincronizar.</p></div>
+        <div><b>APN</b><p class="muted small">Nombre de la red de datos. El APN «internet» da una IP de 10.58.0.0/16 que sale por el PGW-U. Debe coincidir con el configurado en el módulo.</p></div>
+      </div>
+      <p class="muted small">Los cambios se escriben directamente en la base de datos del HSS: valen desde el siguiente intento de conexión, sin reiniciar nada. La WebUI de Open5GS (puerto 9999) sigue disponible como respaldo y usa los mismos datos.</p>
+    </div>
+  </section>
+
   <!-- NÚCLEO -->
   <section id="nucleo" class="tab">
-    <div class="card"><div class="card-h"><h2>Contenedores</h2><span id="core-err" class="muted small"></span></div><div id="containers" class="cgrid"></div></div>
-    <div class="grid2">
-      <div class="card"><div class="card-h"><h2>Suscriptores</h2></div><div class="tw"><table id="subs"></table></div>
-        <p class="muted small">Ki y OPc nunca se muestran. Se gestionan en la WebUI de Open5GS.</p></div>
-      <div class="card"><div class="card-h"><h2>Registro en vivo</h2><select id="log-select" aria-label="Contenedor"></select></div>
-        <pre id="log-view" class="log">Elige un contenedor.</pre></div>
+    <div class="card">
+      <div class="card-h"><div><h2>Núcleo de red (EPC · Open5GS)</h2><span class="muted small">Haz clic en un componente. Los paquetes animados muestran qué enlaces están activos.</span></div>
+        <div class="row"><div class="seg" id="core-layers"><button data-k="" class="sel">Todo</button><button data-k="ctrl">Señalización</button><button data-k="user">Datos de usuario</button></div>
+          <span id="core-health" class="pill off"><span class="dot"></span><span>…</span></span></div></div>
+      <svg id="core-svg" class="dg" role="img" aria-label="Arquitectura del núcleo"></svg>
+      <div class="legend"><span><i class="lg ctrl"></i>señalización</span><span><i class="lg user"></i>datos de usuario</span><span><i class="lg radio"></i>radio</span><span class="muted">Líneas continuas = componente activo · atenuado = apagado</span></div>
+    </div>
+    <div class="grid2 wide">
+      <div class="card"><div class="card-h"><h2>Componente</h2></div><div id="core-info" class="info"></div></div>
+      <div class="card"><div class="card-h"><h2>¿Qué pasa cuando el módulo se conecta?</h2></div>
+        <p class="muted small">Procedimiento de registro (attach) y creación de la sesión de datos. Reprodúcelo o avanza paso a paso.</p>
+        <div id="attach-stepper" class="stepper"></div></div>
+    </div>
+  </section>
+
+  <!-- eNB -->
+  <section id="enb" class="tab">
+    <div class="grid2 wide">
+      <div class="card">
+        <div class="card-h"><div><h2>eNB NB-IoT (OpenAirInterface)</h2><span class="muted small">Por dentro: de los túneles IP del núcleo a la señal de radio.</span></div><span id="enb-state" class="pill off"><span class="dot"></span><span>…</span></span></div>
+        <svg id="enb-svg" class="dg narrow" role="img" aria-label="Pila de protocolos del eNB"></svg>
+        <div class="legend"><span><i class="lg ctrl"></i>señalización</span><span><i class="lg user"></i>datos de usuario</span><span><i class="lg radio"></i>radio</span></div>
+      </div>
+      <div>
+        <div class="card"><div class="card-h"><h2>Capa</h2></div><div id="enb-info" class="info"></div></div>
+        <div class="card"><div class="card-h"><h2>Recorrido</h2>
+          <div class="seg" id="enb-flows"><button data-f="dl-user" class="sel">Bajada · datos</button><button data-f="dl-sig">Bajada · señalización</button><button data-f="ul">Subida</button></div></div>
+          <div id="enb-stepper" class="stepper"></div></div>
+      </div>
+    </div>
+    <div class="grid2 wide">
+      <div class="card"><div class="card-h"><h2>Del botón rojo a la señal</h2></div>
+        <ol id="enb-start" class="tl"></ol></div>
+      <div>
+        <div class="card"><div class="card-h"><h2>Parámetros que usa el eNB</h2></div><table class="kv" id="enb-plan"></table>
+          <p class="muted small">Salen del plan RF (módulo Radio) y se aplican al arrancar.</p></div>
+        <div class="card"><div class="card-h"><h2>Registro del eNB</h2></div><pre id="enb-log" class="log">…</pre></div>
+      </div>
     </div>
   </section>
 
@@ -123,6 +190,8 @@
   </section>
 </main>
 <div id="toasts" aria-live="polite"></div>
+<script src="diagram.js"></script>
 <script src="app.js"></script>
+<script src="modules.js"></script>
 </body>
 </html>

@@ -44,7 +44,7 @@ Parámetros de la red: PLMN `001/01`, TAC `1`, APN `internet`, subred de UE `10.
 | Radio virtual | `config/srsran/`, `docker/srsran4g/`, `scripts/sim.sh`, `scripts/validate.sh` | eNB y UE simulados (srsRAN 4G) para validar el núcleo sin emitir RF. |
 | Reglas de RF | `rf-plan.example.yaml`, `scripts/rf-check.sh`, `scripts/rf-run.sh` | Validación del plan, corte automático por duración y registro de sesiones. |
 | Broker MQTT | `mosquitto/` | Mensajería entre el dispositivo y el panel. |
-| Panel de control | `app/` | Pestañas Resumen, Radio, Dispositivo, Núcleo y Guía; simulador de dispositivo (`fake_device.py`). |
+| Panel de control | `app/` | Pestañas Resumen, Suscriptores, Núcleo, eNB, Radio, Dispositivo y Ayuda; simulador de dispositivo (`fake_device.py`). |
 | Firmware | `firmware/esp32-nbiot/` | Código del ESP32 (Arduino/PlatformIO): módem por AT, sensor DHT22, LED y MQTT. |
 | Documentación | `docs/` | Plan del proyecto, etapas, guías del panel y presentación de avance. |
 
@@ -52,11 +52,15 @@ Parámetros de la red: PLMN `001/01`, TAC `1`, APN `internet`, subred de UE `10.
 
 Interfaz en <http://127.0.0.1:8080> que sigue el tema claro/oscuro del sistema.
 
-- **Resumen:** mapa animado de la red (ESP32 → eNB → MME/SGW/PGW → Mosquitto → panel) con el estado real de cada contenedor.
+- **Resumen:** mapa animado de la red (ESP32 → eNB → MME/SGW/PGW → Mosquitto → panel) con flechas y paquetes que viajan solo por los enlaces activos; clic en un nodo para ver su función, interfaces y registro.
+- **Suscriptores:** alta, edición, baja e importación por CSV de las SIM (IMSI, K, OPc, AMF, APN) directamente en la base de datos del HSS, sin entrar a la WebUI de Open5GS (que queda como respaldo). Ki y OPc nunca se muestran.
+- **Núcleo:** arquitectura animada del EPC con sus interfaces, puertos y parámetros reales, y el procedimiento de registro (attach) reproducible paso a paso con el mensaje y el detalle técnico de cada salto.
+- **eNB (OAI):** pila de protocolos del eNB (S1AP/GTP-U, RRC, PDCP, RLC, MAC, PHY NB-IoT, UHD/USRP) con recorridos de bajada y subida, la secuencia de arranque, los parámetros tomados del plan RF y el registro en vivo.
 - **Radio:** plan RF con valores seguros y botón de transmisión que exige plan válido, dos confirmaciones humanas (portadora libre y autorizado por) y mantenerlo pulsado; corta solo al cumplirse la duración.
 - **Dispositivo:** telemetría en vivo, gráfico, control del LED e intervalo de envío.
-- **Núcleo:** contenedores, suscriptores (nunca se muestran Ki/OPc) y registros en vivo.
-- **Guía:** instrucciones por fase (`docs/guide/*.md`).
+- **Ayuda:** guías por fase (`docs/guide/*.md`).
+
+Una barra superior fija muestra siempre el estado del núcleo, del dispositivo y de la RF.
 
 El panel monta el socket de Docker para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
 
