@@ -77,6 +77,24 @@ docker compose up -d          # núcleo + broker + panel (no emite radio)
 
 Panel: <http://127.0.0.1:8080>. Para el recorrido completo (radio virtual, eNB NB-IoT, transmisión real, firmware) y los problemas frecuentes, ver [`docs/etapas.md`](docs/etapas.md).
 
+## Reanudación
+
+Para retomar el trabajo en la carpeta del proyecto cuando ya se hizo el inicio rápido (imágenes construidas, `.env` creado):
+
+```bash
+cd Narrowcast-NB
+docker compose up -d                          # levanta núcleo, broker y panel (reutiliza las imágenes)
+docker compose ps                             # todos "running" (subscriber-provisioner termina solo)
+```
+
+- **Panel:** <http://127.0.0.1:8080>. **WebUI de Open5GS:** <http://127.0.0.1:9999>.
+- **Datos conservados:** los suscriptores y el plan RF (`data/rf-plan.yaml`) se mantienen entre reinicios; no hay que volver a cargarlos.
+- **Actualizar el código:** `git pull` y, si cambió algo en `app/`, `docker/` o `compose.yaml`, `docker compose up -d --build`.
+- **Probar sin hardware:** `docker compose exec app python fake_device.py esp32-sim`.
+- **eNB NB-IoT:** si el contenedor `nb-enb-nbiot` no existe (por ejemplo tras `docker compose down`), recrearlo con `docker compose --profile radio create enb-nbiot`. Emitir por radio sigue exigiendo plan RF completo y autorización (ver [`docs/etapas.md`](docs/etapas.md)).
+- **Ver registros:** `docker logs -f nb-mme` (o cualquier contenedor `nb-*`), o la pestaña **Núcleo** del panel.
+- **Detener:** `docker compose --profile sim --profile radio down` (conserva los datos); `docker compose down -v` además borra los suscriptores.
+
 ## Estructura
 
 ```
