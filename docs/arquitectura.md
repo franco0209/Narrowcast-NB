@@ -127,7 +127,7 @@ Se usa la rama `develop-nb-iot` (último commit 2020), que añade NB-IoT al eNB 
 | `@BAND@` | `band` del plan RF (3, 8, 20 o 28) |
 | `@DL_HZ@` | `dl_freq_hz` del plan RF |
 | `@UL_OFFSET@` | desplazamiento UL–DL fijo por banda (B3: −95 MHz, B8: −45, B20: +41, B28: −55) |
-| `@TX_ATT@` | `90 − tx_gain` del plan |
+| `@TX_GAIN@` | `tx_gain` del plan, sin convertir (ganancia en dB que OAI pasa a UHD) |
 | `@MME_IP@` | `10.44.0.10` por defecto |
 | `@ENB_IP@` | `10.44.0.40` por defecto |
 

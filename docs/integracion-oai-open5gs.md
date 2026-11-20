@@ -239,7 +239,7 @@ Secuencia de arranque [parte leída, parte estándar]:
 4. Con la asociación establecida, el eNB envía **S1 Setup Request** con su `eNB_ID`, PLMN y TAC. El MME de Open5GS lo valida (§2.3) y responde. **Esa parte no necesita radio y ya está verificada en este proyecto** (`eNB-S1 accepted`).
 5. Con radio: emite NPSS/NSSS (sincronización), NPBCH (MIB-NB) y SIB-NB; escucha NPRACH (los dispositivos piden acceso); y a partir de ahí el RRC y el MAC atienden al módulo.
 
-### 3.5 Un hallazgo importante sobre `tx_gain` (a corregir)
+### 3.5 Un hallazgo importante sobre `tx_gain` (corregido)
 
 La cadena de código real es [leído]:
 
@@ -251,7 +251,9 @@ enb.conf: tx_gain = X
   → targets/ARCH/USRP/.../usrp_lib.cpp s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i], i)
 ```
 
-Es decir, en esta rama **`tx_gain` del `.conf` se pasa tal cual a `set_tx_gain` de UHD como una GANANCIA, no como una atenuación**. Pero `scripts/oai-enb-start.sh` asume lo contrario: calcula `TX_ATT = 90 − tx_gain del plan` y lo escribe en `tx_gain`. Con un plan de `tx_gain: 10` el script escribiría `80`, que UHD interpretaría como 80 dB de ganancia (se recortaría al máximo del equipo): **potencia casi máxima en vez de mínima**. En `arquitectura.md` este supuesto figuraba como «sin verificar»; la lectura del código indica que es incorrecto. **Debe corregirse antes de conectar el USRP** (pasar el valor del plan directamente, `TX_ATT = TXG`) y confirmarse midiendo con un analizador de espectro. Hasta entonces, usar siempre cable con atenuación externa de ≥ 60 dB.
+Es decir, en esta rama **`tx_gain` del `.conf` se pasa tal cual a `set_tx_gain` de UHD como una GANANCIA, no como una atenuación**.
+
+**Corregido:** una versión anterior de `scripts/oai-enb-start.sh` suponía lo contrario (`TX_ATT = 90 − tx_gain`), de modo que un plan de `tx_gain: 10` habría pedido 80 dB de ganancia (potencia casi máxima). Ahora el script escribe el `tx_gain` del plan sin convertir (marcador `@TX_GAIN@`). Sigue pendiente **medir la potencia real con un analizador de espectro**, porque la potencia de salida depende del modelo de USRP y de la frecuencia; hasta entonces, usar siempre cable con atenuación externa de ≥ 60 dB.
 
 ### 3.6 Limitaciones de la rama (y por qué importan)
 
@@ -280,7 +282,7 @@ Se ejecuta **dentro** del contenedor del eNB [leído]:
 
 1. Lee `band`, `dl_freq_hz`, `tx_gain` de `rf-plan.yaml` con `sed`.
 2. Elige el desplazamiento UL–DL según la banda (`case`: B3 −95 MHz, B8 −45, B20 +41, B28 −55).
-3. Reemplaza los marcadores `@BAND@`, `@DL_HZ@`, `@UL_OFFSET@`, `@TX_ATT@`, `@MME_IP@`, `@ENB_IP@` en `config/oai/enb.nbiot.conf.tmpl` y genera `/tmp/enb.nbiot.conf`.
+3. Reemplaza los marcadores `@BAND@`, `@DL_HZ@`, `@UL_OFFSET@`, `@TX_GAIN@`, `@MME_IP@`, `@ENB_IP@` en `config/oai/enb.nbiot.conf.tmpl` y genera `/tmp/enb.nbiot.conf`.
 4. Lanza `exec lte-softmodem -O /tmp/enb.nbiot.conf -S`.
 
 La plantilla viene de la de ejemplo de OAI. Se fijan PLMN `001/01`, TAC `1` (deben coincidir con `mme.yaml`: de lo contrario el MME rechaza el S1 Setup), 50 PRB, 1 antena, y los parámetros NB-IoT (`nprach_*`, `npdcch_*`, temporizadores `_NB`) se dejan en los de OAI.
@@ -389,7 +391,7 @@ ESP32: lee DHT22 → mqtt.publish("nb/<id>/telemetry", {"temp":..})   [esp32-nbi
 | USRP + emisión NB-IoT real | Sin verificar (falta hardware y autorización) |
 | Attach de un módulo NB-IoT real contra OAI + Open5GS | Sin verificar (riesgo principal) |
 | Firmware ESP32 con SIM7080G | Sin verificar |
-| `tx_gain` del script (atenuación vs. ganancia) | **Incorrecto según el código leído** (§3.5): corregir |
+| `tx_gain` como ganancia (no atenuación) | **Corregido** según el código leído (§3.5); falta medir potencia real |
 | Optimizaciones CIoT (datos sobre NAS, PSM/eDRX negociado) con esta pareja | Sin verificar |
 
 ---

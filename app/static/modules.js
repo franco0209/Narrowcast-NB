@@ -179,7 +179,7 @@ const ENB_INFO = {
   pdcp: { t: "PDCP", d: "Comprime/gestiona cabeceras, numera paquetes y aplica cifrado e integridad de la radio entre el módulo y el eNB.", cfg: [["Portadoras", "SRB (señalización) y DRB (datos)"]] },
   rlc: { t: "RLC", d: "Segmenta los paquetes para que quepan en los bloques de radio y, en modo con acuse, retransmite lo que se pierde.", cfg: [["Modos", "AM (con acuse) para señalización y datos"]] },
   mac: { t: "MAC · planificador", d: "Decide quién transmite cuándo: reparte los recursos de bajada (NPDCCH/NPDSCH) y subida (NPUSCH) y atiende el acceso aleatorio del módulo (NPRACH).", cfg: [["Nota", "NB-IoT usa una portadora de 180 kHz y repeticiones para ganar alcance"]] },
-  phy: { t: "PHY NB-IoT", d: "Genera la señal de radio. En bajada difunde sincronismo (NPSS/NSSS) y sistema (NPBCH) y envía datos por NPDCCH/NPDSCH; en subida recibe NPRACH y NPUSCH.", cfg: [["Banda y frecuencia", "del plan RF (rf-plan.yaml)"], ["Ganancia", "tx_gain de OAI = atenuación (90 − ganancia del plan); supuesto válido para B210, por verificar"], ["Riesgo conocido", "funciones de subida no conformes con 3GPP en esta rama; probada con Quectel BC95, no con Open5GS"]] },
+  phy: { t: "PHY NB-IoT", d: "Genera la señal de radio. En bajada difunde sincronismo (NPSS/NSSS) y sistema (NPBCH) y envía datos por NPDCCH/NPDSCH; en subida recibe NPRACH y NPUSCH.", cfg: [["Banda y frecuencia", "del plan RF (rf-plan.yaml)"], ["Ganancia", "tx_gain del plan, pasado tal cual a UHD como ganancia (dB); medir la potencia real con analizador"], ["Riesgo conocido", "funciones de subida no conformes con 3GPP en esta rama; probada con Quectel BC95, no con Open5GS"]] },
   uhd: { t: "UHD → USRP", d: "El driver UHD entrega al USRP las muestras IQ de la señal y recibe las del receptor. El USRP las convierte a RF con sus DAC/ADC y su oscilador.", cfg: [["Imagen", "UHD 3.15 compilado en el contenedor"], ["USB", "si el USRP es USB hay que pasar /dev/bus/usb al contenedor (compose.yaml)"], ["Sin USRP", "el eNB termina con «No USRP Device Found»"]] },
   rf: { t: "Camino de RF", d: "De la salida del USRP al módulo: por defecto cable coaxial con atenuador (≥ 60 dB); la antena solo con permiso escrito.", cfg: [["Modo", "cable + atenuación (plan RF)"], ["Regla", "se emite solo con plan válido, duración limitada y botón mantenido"]] },
   ue: { t: "Módulo NB-IoT", d: "Recibe NPSS/NSSS, lee el NPBCH, ejecuta el acceso aleatorio y desde ahí comienza el procedimiento de attach.", cfg: [["Banda", "debe coincidir con la del plan RF"]] },
@@ -207,7 +207,7 @@ const LAYERS_UL = [
 const START = [
   { k: "plan", t: "El panel valida el plan RF", d: "scripts/rf-check.sh exige banda soportada, autorización, ganancia ≤ 30, ≥ 60 dB en cable, duración 1–600 s y portadora libre." },
   { k: "up", t: "Se enciende el contenedor nb-enb-nbiot", d: "El panel arranca el contenedor ya creado (docker start)." },
-  { k: "conf", t: "oai-enb-start.sh genera la configuración", d: "Rellena la plantilla enb.nbiot.conf.tmpl con banda, frecuencia, atenuación (90 − ganancia) y la IP del MME." },
+  { k: "conf", t: "oai-enb-start.sh genera la configuración", d: "Rellena la plantilla enb.nbiot.conf.tmpl con banda, frecuencia, ganancia TX (tal cual el plan) y la IP del MME." },
   { k: "usrp", t: "lte-softmodem abre el USRP por UHD", d: "Sin USRP termina aquí con «No USRP Device Found»." },
   { k: "s1", t: "S1 Setup con el MME", d: "El eNB se presenta (PLMN, TAC) y el MME responde «eNB-S1 accepted».", live: "s1" },
   { k: "bcast", t: "La PHY difunde NPSS, NSSS y NPBCH", d: "El módulo ya puede sincronizarse y leer la información del sistema (SIB-NB)." },
@@ -243,7 +243,7 @@ async function refreshEnb() {
   st.className = "pill " + (run ? "hot" : "off"); st.lastElementChild.textContent = run ? "eNB EMITIENDO" : d.container === "no creado" ? "contenedor no creado" : "eNB detenido";
   const p = d.plan || {};
   $("#enb-plan").innerHTML = [["Banda", p.band ? "B" + String(p.band).replace(/^[Bb]/, "") : "—"], ["Bajada", p.dl_freq_hz ? (p.dl_freq_hz / 1e6).toFixed(1) + " MHz" : "—"], ["Subida", p.ul_freq_hz ? (p.ul_freq_hz / 1e6).toFixed(1) + " MHz" : "—"],
-    ["Ganancia del plan", p.tx_gain ? p.tx_gain + " dB" : "—"], ["Atenuación en OAI", p.tx_gain !== "" && p.tx_gain !== undefined ? (90 - Number(p.tx_gain)) + " (90 − ganancia)" : "—"], ["Modo", p.modo || "—"], ["Duración máx.", p.duracion_max_s ? p.duracion_max_s + " s" : "—"]]
+    ["Ganancia del plan", p.tx_gain ? p.tx_gain + " dB" : "—"], ["Ganancia en OAI", p.tx_gain !== "" && p.tx_gain !== undefined ? p.tx_gain + " dB (sin conversión)" : "—"], ["Modo", p.modo || "—"], ["Duración máx.", p.duracion_max_s ? p.duracion_max_s + " s" : "—"]]
     .map(([k, v]) => `<tr><th>${k}</th><td>${esc(v)}</td></tr>`).join("");
   const s1 = d.s1_accepted;
   $$("#enb-start [data-live=s1]").forEach((t) => { t.textContent = s1 === null ? "MME no accesible" : s1 ? "✓ el MME aceptó al eNB (visto en su registro)" : "sin S1 Setup aceptado en el registro del MME"; t.classList.toggle("ok", !!s1); });

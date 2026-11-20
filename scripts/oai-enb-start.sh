@@ -18,10 +18,10 @@ case "$BAND" in   # offset UL-DL (Hz) de las bandas permitidas
   3) UL_OFFSET=-95000000;; 8) UL_OFFSET=-45000000;; 20) UL_OFFSET=41000000;; 28) UL_OFFSET=-55000000;;
   *) echo "ERROR: banda $BAND no permitida"; exit 1;;
 esac
-# En OAI "tx_gain" de la config es ATENUACION respecto al maximo del USRP (90 ~ ganancia 0 en B210).
-# Suposicion a verificar con el modelo real: atenuacion = 90 - ganancia del plan.
-TX_ATT=$(( 90 - TXG )); [ "$TX_ATT" -ge 0 ] || TX_ATT=0
-sed -e "s/@BAND@/$BAND/" -e "s/@DL_HZ@/$DL_HZ/" -e "s/@UL_OFFSET@/$UL_OFFSET/" -e "s/@TX_ATT@/$TX_ATT/" \
+# En esta rama de OAI "tx_gain" del .conf se pasa tal cual a UHD set_tx_gain(): es GANANCIA en dB (no atenuacion).
+# Cadena: enb_config.c -> lte-softmodem.c (openair0_cfg.tx_gain) -> usrp_lib.cpp. Se usa el valor del plan sin convertir.
+# La potencia real depende del modelo de USRP: medirla con analizador de espectro antes de usar antena.
+sed -e "s/@BAND@/$BAND/" -e "s/@DL_HZ@/$DL_HZ/" -e "s/@UL_OFFSET@/$UL_OFFSET/" -e "s/@TX_GAIN@/$TXG/" \
     -e "s/@MME_IP@/${MME_IP:-10.44.0.10}/" -e "s#@ENB_IP@#${ENB_IP:-10.44.0.40}#g" "$TMPL" > "$OUT"
-echo "eNB NB-IoT: banda $BAND, DL $DL_HZ Hz, UL offset $UL_OFFSET, atenuacion TX $TX_ATT, MME ${MME_IP:-10.44.0.10}"
+echo "eNB NB-IoT: banda $BAND, DL $DL_HZ Hz, UL offset $UL_OFFSET, ganancia TX $TXG dB, MME ${MME_IP:-10.44.0.10}"
 exec /opt/oai/cmake_targets/lte_build_oai/build/lte-softmodem -O "$OUT" -S "$@"
