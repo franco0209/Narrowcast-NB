@@ -1,143 +1,181 @@
 # Narrowcast-NB
 
-Red celular privada para IoT (NB-IoT) construida con software libre y hardware de bajo costo. Permite que un sensor con un módulo NB-IoT se conecte por radio a una estación base propia y a un núcleo de red propio, sin depender de ningún operador, y que sus datos lleguen a un panel de control web.
+A private NB-IoT cellular network built entirely from open-source software and low-cost hardware.
+A sensor with an NB-IoT module attaches over radio to your own base station and your own core network, with no operator involved, and its data shows up in a web control panel.
 
 ```
-ESP32 ──UART (AT)── Módulo NB-IoT ~~ radio ~~ USRP (eNB) ── UTP ── PC (núcleo Open5GS) ── MQTT ── Panel web
+ESP32 ──UART (AT)── NB-IoT module ~~ radio ~~ USRP (eNB) ── Ethernet ── PC (Open5GS core) ── MQTT ── Web panel
 ```
 
-## Qué es
+NB-IoT is the 3GPP low-power wide-area technology made for sensors that run for years on a battery. This project stands up **every element of that chain** (device, base station, core network, message broker and operations UI), so you can see, measure and break a real cellular IoT network end to end: SIM authentication, IP assignment, data transport, power saving and safe radio operation.
 
-Un banco de pruebas completo de una red celular de banda angosta (NB-IoT, la tecnología LPWAN de 3GPP pensada para sensores de bajo consumo y larga duración de batería). En lugar de usar la red de un operador, el proyecto levanta **todos** los elementos de la cadena: el dispositivo, la estación base, el núcleo de red, el broker de mensajes y la interfaz de operación.
+> Most cellular IoT demos hide the network behind an operator. This one puts the whole network on your desk, shows what each part is doing, and is honest about what is real and what is simulated.
 
-Sirve para estudiar, medir y demostrar cómo funciona una red IoT celular de punta a punta: registro del dispositivo con su SIM, asignación de IP, transporte de datos, ahorro de energía (PSM/eDRX) y operación segura de la radio.
+<p align="center">
+  <img src="docs/img/lab-network.png" alt="The lab: irrigation node, OAI eNB and Open5GS core, with a telemetry packet crossing the user plane" width="900"><br>
+  <sub><b>The lab running:</b> an irrigation node registered through the real OAI eNB, with a telemetry packet travelling through the GTP-U tunnel to the broker and the phone.</sub>
+</p>
 
-## Qué hace
+## Features
 
-- **Registra dispositivos reales** con SIM propia: autenticación en el HSS, sesión de datos y dirección IP en la subred privada.
-- **Transporta telemetría** (temperatura, humedad, calidad de señal) desde un ESP32 hasta el panel, y **envía órdenes** de vuelta (por ejemplo, encender un LED o cambiar el intervalo de envío).
-- **Controla la transmisión de radio** con reglas de seguridad: la RF está apagada por defecto y solo se enciende con un plan validado, autorización escrita, potencia limitada y duración máxima.
-- **Muestra el estado de toda la red** en un panel web: mapa animado de la cadena, contenedores, suscriptores, registros en vivo y datos del dispositivo.
-- **Se puede probar sin hardware**: una radio virtual (ZMQ) y un simulador de dispositivo permiten validar el núcleo y el panel en cualquier PC.
+- **Real attach procedure.** SIM authentication in the HSS (Milenage), NAS security, session creation and an IP address from a private subnet, using the unmodified Open5GS EPC.
+- **Open-source NB-IoT base station.** OpenAirInterface (`develop-nb-iot` branch), run in a container with a one-line fix to its S1AP decoder so it can complete the attach against Open5GS.
+- **Telemetry up, commands down.** Temperature, humidity and signal quality flow from an ESP32 over MQTT to the panel; commands (LED, report interval, pump) flow back.
+- **RF safety by design.** Radio is off by default. It only turns on with a validated plan, written authorisation, limited gain and a maximum duration, and every session is logged.
+- **Live control panel.** Animated network map, subscriber management, step-by-step attach replay, per-layer eNB view, live container logs and device data.
+- **A lab that needs no radio.** An irrigation node (ESP32, SIM7080G module, soil, temperature, tank-level and distance sensors, pump) registers through the **real OAI eNB** using a fake radio, then sends **real MQTT through the GTP-U tunnel** of OAI and the core. Open the UE, the RAN or the core to see what runs inside each one.
+- **Attack scenarios.** Cloned SIM, intruder and detach, each run against the real HSS and MME.
+- **Reproducible.** Everything runs in Docker Compose on its own network, with pinned upstream versions.
 
-## Cómo lo logra
+## The lab at a glance
 
-| Capa | Solución |
+The Laboratory tab of the panel runs a complete node on top of real software. Only the radio interface (Uu) is simulated:
+
+| Part | What it is |
 |---|---|
-| Dispositivo | ESP32 con módulo NB-IoT (SIM7080G o BG96) controlado por comandos AT; publica y recibe por MQTT. |
-| Radio (eNB) | USRP con OpenAirInterface (rama `develop-nb-iot`), la implementación de código abierto de NB-IoT en la estación base. Corre en un contenedor Ubuntu 16.04 porque la rama no compila en sistemas más nuevos. |
-| Núcleo (EPC) | Open5GS v2.7.5: MME, HSS, SGW-C/U, PGW-C/U y PCRF, con MongoDB para los suscriptores. |
-| Datos | Broker MQTT Mosquitto con usuario y clave; tópicos `nb/<id>/telemetry`, `cmd` y `status`. |
-| Operación | Panel web (FastAPI + HTML/JS sin librerías externas) que consulta Docker, MQTT y el plan RF. |
-| Despliegue | Todo en Docker Compose, con red propia (`10.44.0.0/24`) y contenedores `nb-*`; arranca con un solo comando. |
-| Seguridad de RF | Plan RF (`data/rf-plan.yaml`) validado por script y por el panel antes de emitir; sesiones registradas en un CSV. |
+| **UE (the node)** | ESP32 firmware shown as highlighted C code, SIM7080G module with an AT console, interactive sensors (move the soil or tank level, put a hand in front of the ultrasonic sensor) and a pump that reacts. |
+| **RAN** | The OAI eNB: RRC, S1AP, GTP-U and MAC are the real ones, driven through a fake radio and an injector. |
+| **Core** | Open5GS (MME, HSS, SGW-C/U, PGW-C/U, PCRF) plus a minimal phone that subscribes to MQTT and can command the node. |
+| **User plane** | MQTT and ping travel UE → OAI → GTP-U → SGW-U → PGW-U → broker. Per-message byte counters from the UPF show that each packet really crossed the core. |
 
-Parámetros de la red: PLMN `001/01`, TAC `1`, APN `internet`, subred de UE `10.58.0.0/16`.
+<p align="center">
+  <img src="docs/img/lab-ue.png" alt="Inside the UE: the ESP32, the SIM7080G module, sensors, pump and AT console" width="900"><br>
+  <sub><b>Inside the UE:</b> sensors you can move, a pump that reacts, the module's registration state and its AT console.</sub>
+</p>
 
-## Módulos
+<p align="center">
+  <img src="docs/img/lab-user-plane.png" alt="User-plane log with per-message UPF byte counters" width="900"><br>
+  <sub><b>User-plane log:</b> the control-plane log stays empty for data, so each message is backed by the UPF packet and byte counters.</sub>
+</p>
 
-| Módulo | Ubicación | Función |
-|---|---|---|
-| Núcleo Open5GS | `config/open5gs/`, `docker/open5gs/`, `docker/webui/` | EPC completo y WebUI (puerto 9999) para dar de alta las SIM. |
-| Alta de suscriptores | `provisioning/` | Carga automática del suscriptor de prueba en MongoDB al arrancar. |
-| eNB NB-IoT | `docker/oai-nbiot/`, `config/oai/`, `scripts/oai-enb-start.sh` | Imagen de OAI y arranque del eNB con banda, frecuencia y ganancia tomadas del plan RF. |
-| Radio virtual | `config/srsran/`, `docker/srsran4g/`, `scripts/sim.sh`, `scripts/validate.sh` | eNB y UE simulados (srsRAN 4G) para validar el núcleo sin emitir RF. |
-| Reglas de RF | `rf-plan.example.yaml`, `scripts/rf-check.sh`, `scripts/rf-run.sh` | Validación del plan, corte automático por duración y registro de sesiones. |
-| Broker MQTT | `mosquitto/` | Mensajería entre el dispositivo y el panel. |
-| Panel de control | `app/` | Pestañas Resumen, Suscriptores, Núcleo, eNB, Radio, Dispositivo, Laboratorio y Ayuda; simulador de dispositivo (`fake_device.py`). |
-| Laboratorio de simulación | `app/simlab/`, `app/web/src/lab/`, `lab/oai-fakerf/` | Nodo de riego NB-IoT (ESP32 + SIM7080G + sensores) que se registra en Open5GS **a través del eNB real de OAI** (radio falsa) y manda MQTT real por el túnel GTP-U; vistas de detalle del UE, la RAN y el núcleo |
-| Firmware | `firmware/esp32-nbiot/` | Código del ESP32 (Arduino/PlatformIO): módem por AT, sensor DHT22, LED y MQTT. |
-| Documentación | `docs/` | Proyecto, conceptos, arquitectura, operación, laboratorio y referencia (índice en `docs/README.md`), más las guías del panel. |
+## How it works
 
-### Panel de control
+| Layer | Solution |
+|---|---|
+| Device | ESP32 with an NB-IoT module (SIM7080G or BG96) driven by AT commands; publishes and subscribes over MQTT. |
+| Radio (eNB) | USRP with OpenAirInterface (`develop-nb-iot`), the open-source NB-IoT implementation for the base station. Runs on Ubuntu 16.04 in a container, since the branch does not build on newer systems. |
+| Core (EPC) | Open5GS v2.7.5: MME, HSS, SGW-C/U, PGW-C/U and PCRF, with MongoDB for subscribers. |
+| Data | Mosquitto MQTT broker with user and password; topics `nb/<id>/telemetry`, `cmd` and `status`. |
+| Operations | Web panel (FastAPI backend, React + TypeScript frontend) that talks to Docker, MQTT and the RF plan. |
+| Deployment | Docker Compose, with its own network (`10.44.0.0/24`) and `nb-*` containers. |
+| RF safety | An RF plan validated by script and by the panel before any transmission; sessions recorded in a CSV. |
 
-Interfaz en <http://127.0.0.1:8080> que sigue el tema claro/oscuro del sistema.
+Network parameters: PLMN `001/01`, TAC `1`, APN `internet`, UE subnet `10.58.0.0/16`.
 
-- **Resumen:** mapa animado de la red (ESP32 → eNB → MME/SGW/PGW → Mosquitto → panel) con flechas y paquetes que viajan solo por los enlaces activos; clic en un nodo para ver su función, interfaces y registro.
-- **Suscriptores:** alta, edición, baja e importación por CSV de las SIM (IMSI, K, OPc, AMF, APN) directamente en la base de datos del HSS, sin entrar a la WebUI de Open5GS (que queda como respaldo). Ki y OPc nunca se muestran.
-- **Núcleo:** arquitectura animada del EPC con sus interfaces, puertos y parámetros reales, y el procedimiento de registro (attach) reproducible paso a paso con el mensaje y el detalle técnico de cada salto.
-- **eNB (OAI):** pila de protocolos del eNB (S1AP/GTP-U, RRC, PDCP, RLC, MAC, PHY NB-IoT, UHD/USRP) con recorridos de bajada y subida, la secuencia de arranque, los parámetros tomados del plan RF y el registro en vivo.
-- **Radio:** plan RF con valores seguros y botón de transmisión que exige plan válido, dos confirmaciones humanas (portadora libre y autorizado por) y mantenerlo pulsado; corta solo al cumplirse la duración.
-- **Dispositivo:** telemetría en vivo, gráfico, control del LED e intervalo de envío.
-- **Laboratorio:** dispositivos IoT virtuales (foco, sensor de clima, medidor de tanque e intruso) que se registran en el núcleo real; escena animada, traza del flujo con lo que registró el núcleo y escenarios de fallo (intruso, SIM clonada, resincronización de SQN, eNB ajeno, reposo PSM). La radio es simulada.
-- **Ayuda:** guías por fase (`docs/guide/*.md`).
+## Quick start
 
-Una barra superior fija muestra siempre el estado del núcleo, del dispositivo y de la RF.
-
-El panel monta el socket de Docker para encender el eNB, lo que equivale a acceso de administrador al equipo; por eso solo escucha en `127.0.0.1` y no debe exponerse a la red.
-
-## Documentación
-
-Todo está en [`docs/`](docs/README.md), organizado por tema (el índice completo con «qué leer según lo que busques» está en [`docs/README.md`](docs/README.md)):
-
-| Tema | Documento | Contenido |
-|---|---|---|
-| Proyecto | [`docs/proyecto/plan.md`](docs/proyecto/plan.md) | Plan original del proyecto |
-| Proyecto | [`docs/proyecto/estado-por-fases.md`](docs/proyecto/estado-por-fases.md) | Estado de cada fase, lo que falta y el detalle técnico de las fases |
-| Operación | [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md) | Puesta en marcha paso a paso y problemas frecuentes |
-| Conceptos | [`docs/conceptos/fundamentos.md`](docs/conceptos/fundamentos.md) | NB-IoT, EPC, qué son Open5GS y OAI, qué es propio, flujos de punta a punta, glosario y ejercicios |
-| Arquitectura | [`docs/arquitectura/arquitectura.md`](docs/arquitectura/arquitectura.md) | Capas, red y direccionamiento, partes de Open5GS y OAI que se usan, interfaces y protocolos, suscriptores, MQTT, firmware y seguridad de RF |
-| Arquitectura | [`docs/arquitectura/integracion-oai-open5gs.md`](docs/arquitectura/integracion-oai-open5gs.md) | Cómo se relaciona el proyecto con OAI y Open5GS a nivel de código (funciones, archivos, flujos) |
-| Arquitectura | [`docs/arquitectura/codigo-por-dentro.md`](docs/arquitectura/codigo-por-dentro.md) | Lenguajes, procesos e hilos, sincronización, comunicación e interfaces, incluido el código del Laboratorio |
-| Arquitectura | [`docs/arquitectura/modificaciones-oai-open5gs.md`](docs/arquitectura/modificaciones-oai-open5gs.md) | **Qué se modificó de Open5GS y OAI** (y qué no), con la comparación contra los originales y cómo verificarla |
-| Operación | [`docs/operacion/docker-y-compilacion.md`](docs/operacion/docker-y-compilacion.md) | Lenguajes, imágenes, compilación de Open5GS/OAI/srsRAN, perfiles de Compose, volúmenes y comandos |
-| Operación | [`docs/operacion/panel.md`](docs/operacion/panel.md) | Diseño técnico del panel: API REST, eventos SSE, motor de diagramas, seguridad y Laboratorio |
-| Laboratorio | [`docs/laboratorio/implementacion.md`](docs/laboratorio/implementacion.md) | **Cómo se implementó el Laboratorio**: arquitectura, decisiones, problemas resueltos, verificación y limitaciones |
-| Laboratorio | [`docs/laboratorio/pruebas-oai.md`](docs/laboratorio/pruebas-oai.md) | Pruebas de OAI sin USRP (radio falsa + inyector): qué funciona, hallazgos y lo que falta |
-| Referencia | [`docs/referencia/verificacion.md`](docs/referencia/verificacion.md) | Estado de verificación: qué está comprobado y qué no |
-| Referencia | [`docs/referencia/preguntas-recurrentes.md`](docs/referencia/preguntas-recurrentes.md) | Preguntas recurrentes con respuesta breve y enlaces al detalle |
-| Panel | [`docs/guide/`](docs/guide/04-laboratorio.md) | Guías que muestra la pestaña Ayuda del panel (radio, módulo, datos, laboratorio) |
-
-## Estado
-
-El software está listo hasta donde se puede sin hardware: núcleo, panel, broker y eNB configurado funcionan (S1 Setup verificado). Falta la prueba con USRP, SIM y módulo reales, que dependen de autorización y de equipos externos. El detalle por fase, lo que falta y la guía de puesta en marcha están en [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md).
-
-## Inicio rápido
-
-Requiere Docker con Compose v2 y unos 10 GB libres.
+Requires Docker with Compose v2 and about 10 GB of free disk.
 
 ```bash
 git clone https://github.com/franco0209/Narrowcast-NB.git
 cd Narrowcast-NB
-cp .env.example .env          # cambiar al menos MQTT_PASS
-docker compose up -d          # núcleo + broker + panel (no emite radio)
+cp .env.example .env          # change at least MQTT_PASS
+docker compose up -d          # core + broker + panel (no radio emission)
 ```
 
-Panel: <http://127.0.0.1:8080>. Para el recorrido completo (radio virtual, eNB NB-IoT, transmisión real, firmware) y los problemas frecuentes, ver [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md).
+Open the panel at <http://127.0.0.1:8080>. The Open5GS WebUI is at <http://127.0.0.1:9999>.
 
-## Reanudación
-
-Para retomar el trabajo en la carpeta del proyecto cuando ya se hizo el inicio rápido (imágenes construidas, `.env` creado):
+To try the Laboratory (no hardware needed):
 
 ```bash
-cd Narrowcast-NB
-docker compose up -d                          # levanta núcleo, broker y panel (reutiliza las imágenes)
-docker compose ps                             # todos "running" (subscriber-provisioner termina solo)
+docker compose --profile oailab create oai-lab   # once: the fake-radio eNB container
 ```
 
-- **Panel:** <http://127.0.0.1:8080>. **WebUI de Open5GS:** <http://127.0.0.1:9999>.
-- **Datos conservados:** los suscriptores y el plan RF (`data/rf-plan.yaml`) se mantienen entre reinicios; no hay que volver a cargarlos.
-- **Actualizar el código:** `git pull` y, si cambió algo en `app/`, `docker/` o `compose.yaml`, `docker compose up -d --build`.
-- **Probar sin hardware:** `docker compose exec app python fake_device.py esp32-sim`.
-- **eNB NB-IoT:** si el contenedor `nb-enb-nbiot` no existe (por ejemplo tras `docker compose down`), recrearlo con `docker compose --profile radio create enb-nbiot`. Emitir por radio sigue exigiendo plan RF completo y autorización (ver [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md)).
-- **Ver registros:** `docker logs -f nb-mme` (o cualquier contenedor `nb-*`), o la pestaña **Núcleo** del panel.
-- **Detener:** `docker compose --profile sim --profile radio down` (conserva los datos); `docker compose down -v` además borra los suscriptores.
+Then open the **Laboratorio** tab and press **Registrar nodo** (about 45 s: the eNB starts and settles before the node registers).
 
-## Estructura
+Other useful commands:
+
+```bash
+docker compose ps                                    # every service "running"
+docker logs -f nb-mme                                # any nb-* container
+docker compose exec app python fake_device.py esp32-sim   # synthetic telemetry
+docker compose --profile sim up -d && scripts/validate.sh # virtual radio: attach + ping through the tunnel
+docker compose --profile sim --profile radio down    # stop, keeping data
+docker compose down -v                               # stop and delete subscribers
+```
+
+Step-by-step setup, including the real-radio path, is in [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md).
+
+## Control panel
+
+A web UI at <http://127.0.0.1:8080> that follows the system light/dark theme.
+
+- **Summary:** animated map of the network (ESP32 → eNB → MME/SGW/PGW → Mosquitto → panel); click a node for its role, interfaces and logs.
+- **Subscribers:** create, edit, delete and CSV-import SIMs (IMSI, K, OPc, AMF, APN) directly in the HSS database. K and OPc are never displayed.
+- **Core:** animated EPC architecture with real interfaces, ports and parameters, and the attach procedure replayable step by step.
+- **eNB (OAI):** the eNB protocol stack (S1AP/GTP-U, RRC, PDCP, RLC, MAC, NB-IoT PHY, UHD) with downlink and uplink paths, start-up sequence, parameters taken from the RF plan and the live log.
+- **Radio:** the RF plan with safe defaults and a transmit button that requires a valid plan, two human confirmations (free carrier, authorised by) and press-and-hold; it cuts off when the maximum duration is reached.
+- **Device:** latest reading, history chart, and commands to the node.
+- **Laboratory:** the irrigation node on real OAI and Open5GS, as described above.
+- **Help:** built-in guides for radio, module, data and the lab.
+
+## Modules
+
+| Module | Location | Role |
+|---|---|---|
+| Open5GS core | `config/open5gs/`, `docker/open5gs/`, `docker/webui/` | Full EPC and WebUI (port 9999) to register SIMs. |
+| Subscriber provisioning | `provisioning/` | Loads the test subscriber into MongoDB at start-up. |
+| NB-IoT eNB | `docker/oai-nbiot/`, `config/oai/`, `scripts/oai-enb-start.sh` | OAI image and eNB start-up, with band, frequency and gain taken from the RF plan. |
+| Virtual radio | `config/srsran/`, `docker/srsran4g/`, `scripts/sim.sh`, `scripts/validate.sh` | Simulated eNB and UE (srsRAN 4G) to validate the core without emitting RF. |
+| RF rules | `rf-plan.example.yaml`, `scripts/rf-check.sh`, `scripts/rf-run.sh` | Plan validation, automatic cut-off by duration and session log. |
+| MQTT broker | `mosquitto/` | Messaging between the device and the panel. |
+| Control panel | `app/` | FastAPI backend and React frontend (`app/web/`), plus a device simulator (`fake_device.py`). |
+| Laboratory | `app/simlab/`, `app/web/src/lab/`, `lab/oai-fakerf/` | Irrigation node simulator, NAS engine, fake-radio and injector hooks for OAI, and the UE/RAN/Core views. |
+| Firmware | `firmware/esp32-nbiot/` | ESP32 code (Arduino/PlatformIO): modem over AT, DHT22 sensor, LED and MQTT. |
+| Documentation | `docs/` | Project, concepts, architecture, operation, laboratory and reference. |
+
+## What is real and what is simulated
+
+| Real | Simulated |
+|---|---|
+| Open5GS EPC (MME, HSS, SGW, PGW, PCRF, MongoDB) | The radio interface (Uu) in the lab: there is no modulation, power or coverage |
+| OAI RRC, S1AP, GTP-U and MAC | One simulated random access per eNB start in the lab |
+| NAS: Milenage, EIA2, Security Mode | The ESP32 electronics (its logic is reproduced, not the hardware) |
+| MQTT data through the GTP-U tunnel and IP from the PGW-C | Sensor readings (moved with sliders) |
+
+The lab exercises the software of the network, not the physical layer. Real NB-IoT transmission needs a USRP, a module with a SIM and written authorisation for the band and power, and is guarded by the RF safety rules above.
+
+## Project layout
 
 ```
-compose.yaml            servicios (perfil `sim` = radio virtual, `radio` = eNB NB-IoT)
-.env.example            variables (copiar a .env)
-rf-plan.example.yaml    plantilla del plan RF (se guarda en data/rf-plan.yaml)
-config/                 configuración de Open5GS, srsRAN y OAI
-provisioning/           alta del suscriptor en MongoDB
-app/                    panel web (FastAPI + React/TypeScript en `app/web/`), simulador de dispositivo y `simlab/` (laboratorio)
-mosquitto/              configuración del broker MQTT
-firmware/               código del ESP32
-data/                   plan RF y registro de sesiones (no se versiona)
+compose.yaml            services (profile `sim` = virtual radio, `radio` = NB-IoT eNB, `oailab` = lab eNB)
+.env.example            variables (copy to .env)
+rf-plan.example.yaml    RF plan template (stored as data/rf-plan.yaml)
+config/                 Open5GS, srsRAN and OAI configuration
+provisioning/           subscriber provisioning in MongoDB
+app/                    control panel (FastAPI + React/TypeScript in app/web/), device simulator, simlab/ (lab)
+lab/oai-fakerf/         fake radio, injector and downlink relay hooks for OAI
+mosquitto/              MQTT broker configuration
+firmware/               ESP32 code
+data/                   RF plan and session log (not versioned)
 docker/                 Dockerfiles (open5gs, srsran4g, webui, oai-nbiot)
-scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh, oai-enb-start.sh
-docs/                   proyecto/, conceptos/, arquitectura/, operacion/, laboratorio/, referencia/ y guide/ (guías del panel)
+scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh, oai-enb-start.sh, oai-lab-start.sh
+docs/                   documentation, organised by topic
 ```
 
-`.env`, `data/`, `firmware/**/secrets.h` y los `.pcap` no se versionan.
+`.env`, `data/`, `firmware/**/secrets.h` and `.pcap` files are not versioned.
+
+## Documentation
+
+Everything is in [`docs/`](docs/README.md), organised by topic (documents are written in Spanish):
+
+| Topic | Document |
+|---|---|
+| Project | [`plan.md`](docs/proyecto/plan.md), [`estado-por-fases.md`](docs/proyecto/estado-por-fases.md) |
+| Concepts | [`fundamentos.md`](docs/conceptos/fundamentos.md): NB-IoT, EPC, SIM, SDR, glossary |
+| Architecture | [`arquitectura.md`](docs/arquitectura/arquitectura.md), [`integracion-oai-open5gs.md`](docs/arquitectura/integracion-oai-open5gs.md), [`codigo-por-dentro.md`](docs/arquitectura/codigo-por-dentro.md), [`modificaciones-oai-open5gs.md`](docs/arquitectura/modificaciones-oai-open5gs.md) (what was changed in Open5GS and OAI, and what was not) |
+| Operation | [`puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md), [`docker-y-compilacion.md`](docs/operacion/docker-y-compilacion.md), [`panel.md`](docs/operacion/panel.md) |
+| Laboratory | [`implementacion.md`](docs/laboratorio/implementacion.md), [`pruebas-oai.md`](docs/laboratorio/pruebas-oai.md) |
+| Reference | [`verificacion.md`](docs/referencia/verificacion.md), [`preguntas-recurrentes.md`](docs/referencia/preguntas-recurrentes.md) |
+
+## Tech
+
+Open5GS v2.7.5, OpenAirInterface (`develop-nb-iot`), srsRAN 4G, Mosquitto, MongoDB, FastAPI, React 18, TypeScript, Vite, framer-motion, Docker Compose, ESP32 (Arduino, TinyGSM, PubSubClient).
+
+## Data and attribution
+
+Open5GS is AGPL-3.0, OpenAirInterface is under the OAI Public License v1.0, and srsRAN 4G is AGPL-3.0; this repository contains only configuration, build files and the project's own code, and builds those projects from their upstream sources at pinned commits.
+
+## License
+
+MIT

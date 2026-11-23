@@ -63,11 +63,11 @@ type UpLine = { seq: number; t: number; dir: "up" | "down"; title: string; trip:
 function UserPlaneLog({ rows }: { rows: any[] }) {
   const [lines, setLines] = useState<UpLine[]>([]);
   const [tot, setTot] = useState<UpStat | null>(null);
-  const last = useRef<UpStat | null>(null), seen = useRef(0), timer = useRef<any>(null), pend = useRef<number[]>([]);
+  const last = useRef<UpStat | null>(null), mounted = useRef(Date.now() / 1000), seen = useRef(0), timer = useRef<any>(null), pend = useRef<number[]>([]);
   const read = () => api("/api/lab/upstats").then((r: UpStat) => r).catch(() => null);
   useEffect(() => { read().then((r) => { if (r) { last.current = r; setTot(r); } }); }, []);
   useEffect(() => {
-    const fresh = rows.filter((e) => e.seq > seen.current && DATA_STAGES.includes(e.stage) && e.stage !== "mqtt_connect");
+    const fresh = rows.filter((e) => e.seq > seen.current && e.t >= mounted.current - 1 && DATA_STAGES.includes(e.stage) && e.stage !== "mqtt_connect");
     if (!rows.length) return;
     seen.current = rows[rows.length - 1].seq;
     if (!fresh.length) return;
@@ -98,7 +98,7 @@ function UserPlaneLog({ rows }: { rows: any[] }) {
       <p className="muted" style={{ marginTop: 0 }}>Los datos (MQTT, ping) viajan por GTP-U: <b>el plano de control (MME, HSS, SGW-C, PGW-C, PCRF) no interviene y por eso su registro queda vacío</b>. La prueba de que el paquete cruzó OAI y el núcleo son los contadores de la interfaz <code>ogstun</code> del PGW-U (UPF), que se leen tras cada mensaje.
         {tot && <> Acumulado del UPF: <b>↑ {tot.up_pkts} paq / {fmtB(tot.up_bytes)}</b> · <b>↓ {tot.down_pkts} paq / {fmtB(tot.down_bytes)}</b>.</>}</p>
       <div className="uplog">
-        {!lines.length && <div className="muted">Aún no hay datos: registra el nodo y espera la primera telemetría (cada 10 s).</div>}
+        {!lines.length && <div className="muted">Esperando el próximo mensaje de datos (la telemetría llega cada 10 s con el nodo registrado). Solo se registran los mensajes en vivo, no el historial.</div>}
         {[...lines].reverse().map((l) => (
           <div key={l.seq} className="upl">
             <span className="muted">{fmtT(l.t)}</span> <i className="chip user">{l.dir === "up" ? "↑ subida" : "↓ bajada"}</i> <b>{l.title}</b>
