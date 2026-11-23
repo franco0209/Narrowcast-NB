@@ -30,7 +30,7 @@ Volúmenes montados: `./data:/data` (plan RF y sesiones), `./docs/guide:/guide:r
 
 ## 2. API REST
 
-Todas las rutas están bajo `/api`. Los errores devuelven `{"detail": "mensaje"}` con el código HTTP correspondiente.
+Todas las rutas están bajo `/api`. Las del laboratorio (`/api/lab/*`, incluida la radio NB-IoT) se describen en [`implementacion.md`](../laboratorio/implementacion.md) y [`radio-nbiot.md`](../laboratorio/radio-nbiot.md). Los errores devuelven `{"detail": "mensaje"}` con el código HTTP correspondiente.
 
 ### Estado y registros
 
@@ -49,7 +49,7 @@ Todas las rutas están bajo `/api`. Los errores devuelven `{"detail": "mensaje"}
 | `PUT /api/subscribers/{imsi}` | igual; `k`, `opc` vacíos = no cambiar | Edita MSISDN, AMF, SQN y APN; cambia K/OPc solo si se envían |
 | `DELETE /api/subscribers/{imsi}` | — | Borra el suscriptor |
 
-Validaciones (servidor): IMSI de 5 a 15 dígitos; K y OPc, 32 caracteres hexadecimales; AMF, 4; SQN, 12; MSISDN de 3 a 15 dígitos; APN de letras, números, punto, guion o guion bajo (hasta 63). Los valores hexadecimales se guardan en mayúsculas. El documento resultante es idéntico al del provisionador y al de la WebUI (ver [`arquitectura.md`](../arquitectura/arquitectura.md) §6).
+Validaciones (servidor): IMSI de 5 a 15 dígitos; K y OPc, 32 caracteres hexadecimales; AMF, 4; SQN, 12; MSISDN de 3 a 15 dígitos; APN de letras, números, punto, guion o guion bajo (hasta 63). Los valores hexadecimales se guardan en mayúsculas. El documento resultante es idéntico al del provisionador y al de la WebUI (ver [`vision-general.md`](../arquitectura/vision-general.md), «Suscriptores en MongoDB»).
 
 ### Radio
 
@@ -84,6 +84,8 @@ La emisión nunca depende solo del navegador: el servidor valida el plan en cada
 | `cmd` | se envía una orden | `device`, `cmd`, `ts` |
 | `radio` | cambia la emisión | `radio`, `reason` |
 | `subs` | se crea, edita o borra un suscriptor | — |
+| `lab` | el simulador del laboratorio emite un evento (el panel lo retransmite) | `ev` |
+| `lab_link` | el simulador aparece o desaparece | `up` |
 
 El navegador usa además sondeo periódico: `/api/core` cada 5 s, `/api/enb` cada 4 s en la pestaña eNB y los registros cada 4 s en la pestaña Núcleo.
 
@@ -100,8 +102,7 @@ El frontend es una aplicación **React 18 + TypeScript** compilada con **Vite** 
 | `components/ui.tsx` | `Pill`, `Card`, `Seg`, `KV`, `Legend`, `Toasts` |
 | `data/*.ts` | Datos de los diagramas: mapa de la red, núcleo (componentes, fichas, attach de 14 pasos), eNB (capas, recorridos, arranque) e iconos |
 | `tabs/*.tsx` | Una pestaña por archivo: Resumen, Suscriptores, Núcleo, Enb, Radio, Dispositivo, Lab, Ayuda |
-| `lab/engine.ts` | Motor del laboratorio: cola de eventos, reproducción con velocidad/pausa/paso y estado de cada dispositivo |
-| `lab/LabScene.tsx` | Escena SVG del laboratorio (núcleo, eNB, dispositivos) y animación de paquetes |
+| `lab/` | El laboratorio: motor de eventos (`engine.ts`), paquetes animados (`flow.tsx`), ilustraciones (`art.tsx`) y las vistas UE, RAN y núcleo (`views/`). Ver [`implementacion.md`](../laboratorio/implementacion.md) |
 
 **Desarrollo local:** `cd app/web && npm install && npm run dev` (puerto 5173; `/api` se redirige al panel en `localhost:8080`). `npm run build` genera `dist/`; `npm run typecheck` solo comprueba tipos. Si se quiere probar el panel sin reconstruir la imagen: `cd app/web && npm run build && cp -r dist/* ../static/` (`app/static/` está en `.gitignore`).
 
@@ -128,6 +129,7 @@ El componente `<Diagram id nodes edges w h up live selected focus layer ambient 
 | eNB (OAI) | `/api/enb` | detalle por capa, recorridos de bajada/subida, secuencia de arranque |
 | Radio | `/api/radio*` | plan RF, botón de mantener pulsado (1,5 s), historial |
 | Dispositivo | SSE, `/api/devices` | telemetría, LED, intervalo; tarjeta «Equipos físicos» (PC, USRP, ESP32) y explicación de la simulación |
+| Laboratorio | `/api/lab/*`, SSE | nodo de riego sobre OAI y Open5GS reales: registrar, SIM clonada, intruso, baja, entorno y radio |
 | Ayuda | `/api/guide*` | guías por fase |
 
 La barra superior fija muestra tres indicadores: contenedores del núcleo activos, dispositivo en línea y RF (apagada o emitiendo).
@@ -168,7 +170,7 @@ Al pulsar un nodo del diagrama de Resumen se muestran las últimas 14 líneas de
 
 ## 6. Cómo extender el panel
 
-**Un endpoint nuevo:** añadir la función con `@app.get/post/...` en `main.py`; si debe notificar a la interfaz, llamar a `broadcast({"type": "…"})` y manejar el tipo en `connect()` de `app.js`.
+**Un endpoint nuevo:** añadir la función con `@app.get/post/...` en `main.py`; si debe notificar a la interfaz, llamar a `broadcast({"type": "…"})` y manejar el tipo en `startRealtime()` de `store.ts`.
 
 **Una pestaña nueva:** crear `tabs/Nueva.tsx` (componente por defecto) y añadirlo a la lista `TABS` de `App.tsx`; sus datos del núcleo salen de `useStore`.
 
@@ -176,37 +178,6 @@ Al pulsar un nodo del diagrama de Resumen se muestran las últimas 14 líneas de
 
 **Probar:** `docker compose up -d --build app`, recargar con Ctrl+Shift+R y, para datos del dispositivo, `docker compose exec app python fake_device.py esp32-sim`. El simulador publica en los mismos tópicos que el firmware real.
 
-
 ## 7. Laboratorio de simulación
 
-Pestaña **Laboratorio** (`web/src/tabs/Lab.tsx`, `web/src/lab/`) más el servicio `simlab` (`app/simlab/`) y el eNB `oai-lab`. Un **nodo de riego NB-IoT** (ESP32 + SIM7080G + sensores y bomba) se registra en el núcleo Open5GS real **a través del eNB real de OpenAirInterface** y manda MQTT real por el túnel GTP-U de OAI. Lo único simulado es la radio (Uu).
-
-**Piezas del servidor (`app/simlab/`)**
-
-Tabla de archivos de `app/simlab/` (rol, hilos y mecanismo de cada uno): ver [`codigo-por-dentro.md` §5.6](../arquitectura/codigo-por-dentro.md#56-laboratorio-nodo-de-riego-sobre-oai--open5gs-reales).
-
-**Del lado de OAI** (`lab/oai-fakerf/`, ver su README): radio falsa, inyector (`inject.c`: comandos `SC`, `UT`, `UC`, `RC` y el puerto de datos 9101) y relevo de bajada (`OAI_RELAY_DL`) que `prepare.sh` instala en el contenedor `nb-oai-lab`.
-
-**Cómo se conecta con el panel**
-
-- `main.py` reenvía `/api/lab/*` al simulador (lista blanca de rutas). Los escenarios `registrar`, `clon` e `intruso` **reinician antes el contenedor de OAI** (conecta un UE por arranque). Un hilo (`lab_bridge`) lee el `/stream` del simulador y lo retransmite al navegador como eventos `{"type":"lab"}`.
-- `GET /api/lab/corelog?since=&until=&imsi=` lee los registros de `nb-mme`, `nb-hss`, `nb-sgwc`, `nb-pgwc` y `nb-pcrf` filtrados por IMSI; `GET /api/lab/oai/log` devuelve las líneas relevantes del registro de OAI. `GET /api/lab/upstats` lee los contadores de la interfaz `ogstun` del PGW-U (paquetes y bytes de subida/bajada): los datos MQTT no dejan rastro en el registro del plano de control, y la tarjeta «Registro del plano de usuario» del laboratorio usa estos contadores como prueba de que cruzaron OAI y el núcleo.
-- `POST /api/lab/node/env?soil=&temp=&tank=&hand=` mueve el «mundo físico» del nodo. Las órdenes del celular usan la API de siempre (`POST /api/devices/riego-01/cmd` con `mode`, `pump`, `soil_low`, `soil_high`, `interval_s`): salen por el broker real y entran al nodo por el túnel.
-
-**Interfaz (`web/src/lab/`)**
-
-| Archivo | Rol |
-|---|---|
-| `engine.ts` | Cola de eventos con velocidad, pausa y «siguiente paso»; `PATHS` (recorrido del mapa por etapa) |
-| `flow.tsx` | Paquetes animados sobre enlaces SVG (cápsulas con estela) y conexión de cada vista al motor |
-| `art.tsx` | Ilustraciones SVG: ESP32, SIM7080G, sensores, bomba, tanque, torre, rack, celular |
-| `views/Overview.tsx` | Mapa de tres bloques (UE · RAN OAI · Núcleo Open5GS) con sus interfaces: el UE solo sale por **Uu**, la RAN tiene Uu a un lado y **S1-MME / S1-U** al otro, el núcleo solo recibe S1 |
-| `views/UEView.tsx` | Código C resaltado según la función en ejecución, nodo interactivo, consola AT y SIM (legítima / clonada / intruso) |
-| `views/RANView.tsx` | Pila de OAI con el recorrido de cada mensaje y su registro en vivo |
-| `views/CoreView.tsx` | Servicios de Open5GS con su estado real, registro del núcleo y el celular (suscriptor MQTT) |
-
-**Qué es real y qué no:** el núcleo, OAI (MAC, RRC, S1AP, GTP-U), el NAS y el MQTT son reales. Con radio falsa no hay portador de datos por el aire: el tramo Uu de los datos lo cubre el relevo UDP de pruebas; la capa física NB-IoT no se prueba.
-
-**Aislamiento:** `simlab` reutiliza la imagen del panel (sin imagen nueva) pero es otro contenedor con `NET_ADMIN` y `/dev/net/tun`. El panel no recibe esos permisos.
-
-**Para añadir un escenario:** función en `simlab/server.py`, registrarla en `SCENARIOS` y añadir el botón en `SCEN` de `tabs/Lab.tsx`.
+La pestaña **Laboratorio** (`web/src/tabs/Lab.tsx`, `web/src/lab/`), el servicio `simlab` y el eNB `oai-lab` tienen su propio documento: [`implementacion.md`](../laboratorio/implementacion.md) (arquitectura, rutas `/api/lab/*`, interfaz y verificación) y [`radio-nbiot.md`](../laboratorio/radio-nbiot.md) (radio de la celda y su modelo).

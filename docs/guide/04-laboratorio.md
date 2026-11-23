@@ -44,6 +44,16 @@ Se eligen en el cuadro del UE (o en la barra):
 - **SIM clonada**: IMSI correcto con otra clave K → «MAC failure» y Authentication Reject.
 - **Intruso**: IMSI sin alta en el HSS → el MME rechaza el Attach.
 
-Los saltos punteados (MME↔HSS, MME↔SGW↔PGW) son internos del núcleo: el simulador no los ve; se dibujan porque el procedimiento 3GPP obliga a que ocurran y se comprueban en los registros del núcleo. Detalle técnico en [`docs/pruebas-oai.md`](../laboratorio/pruebas-oai.md).
+Los saltos punteados (MME↔HSS, MME↔SGW↔PGW) son internos del núcleo: el simulador no los ve; se dibujan porque el procedimiento 3GPP obliga a que ocurran y se comprueban en los registros del núcleo. Detalle técnico en `pruebas-oai.md`.
 
-> Cómo se construyó el laboratorio (arquitectura, decisiones, problemas y verificación): [`../laboratorio-implementacion.md`](../laboratorio/implementacion.md).
+## Cambiar la radio de la celda
+
+En el bloque **RAN**, la tarjeta **Interfaz radio (Uu)** muestra la banda, las frecuencias, el ancho de banda y los parámetros NB-IoT (NPRACH, NPDCCH, paging) que OAI tiene cargados, y deja cambiarlos:
+
+- Los cambios se **guardan** al instante, pero OAI no los usa hasta pulsar **Aplicar a OAI y reiniciar el eNB** (~45 s; el nodo pierde su sesión y se registra de nuevo).
+- El deslizador de **distancia** sí actúa en el acto: cambia el nivel de señal y el nivel de cobertura del nodo (más repeticiones, más latencia y más energía por mensaje; sin cobertura no transmite).
+- Una banda que el módulo no soporta (por ejemplo B7) hace que no encuentre la celda.
+
+Los parámetros son reales; sus consecuencias son un **modelo**, no una medición.
+
+> Cómo se construyó el laboratorio (arquitectura, decisiones, problemas y verificación): `laboratorio/implementacion.md` y `laboratorio/radio-nbiot.md` en la carpeta `docs/`.

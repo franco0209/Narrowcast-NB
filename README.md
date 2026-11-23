@@ -123,7 +123,7 @@ A web UI at <http://127.0.0.1:8080> that follows the system light/dark theme.
 | Control panel | `app/` | FastAPI backend and React frontend (`app/web/`), plus a device simulator (`fake_device.py`). |
 | **Laboratory** | `app/simlab/`, `app/web/src/lab/`, `lab/oai-fakerf/` | The didactic core of the project: irrigation node simulator, NAS engine, radio model, fake-radio and injector hooks for OAI, and the UE/RAN/Core views. |
 | Firmware | `firmware/esp32-nbiot/` | ESP32 code (Arduino/PlatformIO): modem over AT, DHT22 sensor, LED and MQTT. |
-| Documentation | `docs/` | Project, concepts, architecture, operation, laboratory and reference. |
+| Documentation | `docs/` | Concepts, operation, architecture, laboratory and project status. |
 
 ## Project layout
 
@@ -151,12 +151,11 @@ Everything is in [`docs/`](docs/README.md), organised by topic (documents are wr
 
 | Topic | Document |
 |---|---|
-| Project | [`plan.md`](docs/proyecto/plan.md), [`estado-por-fases.md`](docs/proyecto/estado-por-fases.md) |
-| Concepts | [`fundamentos.md`](docs/conceptos/fundamentos.md): NB-IoT, EPC, SIM, SDR, glossary |
-| Architecture | [`arquitectura.md`](docs/arquitectura/arquitectura.md), [`integracion-oai-open5gs.md`](docs/arquitectura/integracion-oai-open5gs.md), [`codigo-por-dentro.md`](docs/arquitectura/codigo-por-dentro.md), [`modificaciones-oai-open5gs.md`](docs/arquitectura/modificaciones-oai-open5gs.md) (what was changed in Open5GS and OAI, and what was not) |
-| Operation | [`puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md), [`docker-y-compilacion.md`](docs/operacion/docker-y-compilacion.md), [`panel.md`](docs/operacion/panel.md) |
-| Laboratory | [`implementacion.md`](docs/laboratorio/implementacion.md), [`pruebas-oai.md`](docs/laboratorio/pruebas-oai.md) |
-| Reference | [`verificacion.md`](docs/referencia/verificacion.md), [`preguntas-recurrentes.md`](docs/referencia/preguntas-recurrentes.md) |
+| Concepts | [`introduccion.md`](docs/conceptos/introduccion.md) (start here), [`fundamentos.md`](docs/conceptos/fundamentos.md): NB-IoT, EPC, SIM, SDR, glossary, exercises |
+| Operation | [`puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md), [`docker-y-compilacion.md`](docs/operacion/docker-y-compilacion.md), [`panel.md`](docs/operacion/panel.md), [`seguridad-rf.md`](docs/operacion/seguridad-rf.md), [`preguntas-frecuentes.md`](docs/operacion/preguntas-frecuentes.md) |
+| Architecture | [`vision-general.md`](docs/arquitectura/vision-general.md), [`open5gs.md`](docs/arquitectura/open5gs.md), [`oai.md`](docs/arquitectura/oai.md), [`integracion.md`](docs/arquitectura/integracion.md), [`modificaciones-oai-open5gs.md`](docs/arquitectura/modificaciones-oai-open5gs.md) (what was changed in Open5GS and OAI, and what was not), [`codigo-propio.md`](docs/arquitectura/codigo-propio.md) |
+| Laboratory | [`implementacion.md`](docs/laboratorio/implementacion.md), [`radio-nbiot.md`](docs/laboratorio/radio-nbiot.md), [`pruebas-oai.md`](docs/laboratorio/pruebas-oai.md) |
+| Project | [`plan.md`](docs/proyecto/plan.md), [`estado.md`](docs/proyecto/estado.md) (status and verification) |
 
 ## Tech
 

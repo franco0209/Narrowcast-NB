@@ -226,7 +226,7 @@ Estos comportamientos de OAI se observaron al hacer funcionar el laboratorio; co
 
 - **`simlab`** (`app/simlab/`, contenedor `nb-simlab`): hace de módulo NB-IoT y de dispositivo. Habla NAS real (Milenage, EIA2) y entrega los mensajes a OAI por UDP 9100; los paquetes IP del nodo salen por 9101 y vuelven por 9102.
 - **Reintentos y vigilancia:** `oai.py` detecta caídas/reinicios del eNB por su identificador de arranque y reintenta hasta 2 veces; el panel (`oai_watchdog`) reinicia `nb-oai-lab` si sale con un código distinto de 0/137/143 mientras hay un trabajo en curso.
-- **Contadores del plano de usuario:** el panel lee la interfaz `ogstun` del PGW-U (`/api/lab/upstats`) para demostrar que los datos cruzaron el núcleo (ver [`codigo-por-dentro.md`](codigo-por-dentro.md) §5.6).
+- **Contadores del plano de usuario:** el panel lee la interfaz `ogstun` del PGW-U (`/api/lab/upstats`) para demostrar que los datos cruzaron el núcleo (ver [`implementacion.md`](../laboratorio/implementacion.md)).
 
 ---
 
@@ -290,4 +290,4 @@ Limitación: la imagen borra el directorio `.git` para ahorrar espacio, así que
 
 ## 8. Resumen
 
-El resumen en una respuesta está en [`preguntas-recurrentes.md`](../referencia/preguntas-recurrentes.md) §6.
+El resumen en una respuesta está en [`preguntas-frecuentes.md`](../operacion/preguntas-frecuentes.md) §6.

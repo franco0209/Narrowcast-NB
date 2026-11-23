@@ -43,7 +43,7 @@ Se reinició `nb-mme` dos veces para limpiar el contexto de los dispositivos del
 
 ## Desde el panel: Laboratorio
 
-El módulo **Laboratorio** del panel lanza estas pruebas sin comandos y las muestra animadas (ver [`panel.md`](../operacion/panel.md) §7). El contenedor `nb-oai-lab` se crea una vez: `docker compose --profile oailab create oai-lab`; el panel lo arranca solo.
+El módulo **Laboratorio** del panel lanza estas pruebas sin comandos y las muestra animadas (ver [`implementacion.md`](implementacion.md)). El contenedor `nb-oai-lab` se crea una vez: `docker compose --profile oailab create oai-lab`; el panel lo arranca solo.
 
 1. **Preparar**: alta de la SIM del nodo en el HSS.
 2. **Registrar nodo** (o **SIM clonada** / **Intruso**): el panel reinicia OAI (conecta un UE simulado por arranque), `simlab` espera ~40 s a que OAI esté listo y registra el nodo. La primera vez `prepare.sh` instala los ganchos de prueba y recompila (1-2 min).

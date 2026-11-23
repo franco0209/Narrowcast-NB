@@ -1,6 +1,6 @@
 # Cómo se implementó el Laboratorio
 
-Este documento cuenta **cómo se construyó** el Laboratorio del panel: qué problema resolvía, qué arquitectura se eligió, qué obstáculos aparecieron y cómo se resolvieron, y qué está verificado y qué no. Para usarlo, ver [`guide/04-laboratorio.md`](../guide/04-laboratorio.md); para el detalle de cada archivo, [`codigo-por-dentro.md`](../arquitectura/codigo-por-dentro.md) §5.6; para lo que se cambió en OAI, [`modificaciones-oai-open5gs.md`](../arquitectura/modificaciones-oai-open5gs.md) §5; para los resultados de las pruebas de OAI, [`pruebas-oai.md`](pruebas-oai.md).
+Este documento cuenta **cómo se construyó** el Laboratorio del panel: qué problema resolvía, qué arquitectura se eligió, qué obstáculos aparecieron y cómo se resolvieron, y qué está verificado y qué no. Para usarlo, ver [`guide/04-laboratorio.md`](../guide/04-laboratorio.md); para la radio NB-IoT de la celda y su modelo, [`radio-nbiot.md`](radio-nbiot.md); para lo que se cambió en OAI, [`modificaciones-oai-open5gs.md`](../arquitectura/modificaciones-oai-open5gs.md) §5; para los resultados de las pruebas de OAI, [`pruebas-oai.md`](pruebas-oai.md).
 
 ---
 
@@ -95,6 +95,8 @@ Proxy `/api/lab/*` con **lista blanca** (`LAB_OK`) hacia `simlab`, más funcione
 - `oai_watchdog`: reinicia OAI si cae (código distinto de 0/137/143) mientras hay un trabajo.
 - `/api/lab/corelog`: líneas de los registros de MME, HSS, SGW-C, PGW-C y PCRF filtradas por IMSI.
 - `/api/lab/upstats`: contadores de `ogstun` del PGW-U (paquetes y bytes de subida y bajada).
+- `POST /api/lab/node/env?soil=&temp=&tank=&hand=`: mueve el «mundo físico» del nodo. Las órdenes del celular usan la API de siempre (`POST /api/devices/riego-01/cmd` con `mode`, `pump`, `soil_low`, `soil_high`, `interval_s`): salen por el broker real y entran al nodo por el túnel.
+- `POST /api/lab/radio/config` y `POST /api/lab/radio/apply`: radio NB-IoT de la celda ([`radio-nbiot.md`](radio-nbiot.md)).
 
 ### 4.4 El frontend
 
@@ -140,18 +142,15 @@ Al principio la traza ocultaba la telemetría y, tras el registro, no se veía a
 - Interfaz: capturas con Chrome sin cabeza (CDP) de las tres vistas y de la traza.
 - Lectura de los contadores de `ogstun` desde el panel (`/api/lab/upstats` responde con paquetes y bytes).
 
-**Todavía sin comprobar con el nodo registrado**
-- La **publicación inmediata** al encender la bomba (cambio en `node.py` y en el firmware).
-- La tarjeta **«Registro del plano de usuario»** y la columna de ruta con SGW-U / PGW-U, sobre un registro real (compilan y se publicaron, pero falta verlas en vivo).
-- Que el **incremento de los contadores** coincida con cada mensaje. Los contadores cuentan todo el tráfico del núcleo, no solo el del nodo.
-
-**Pendiente de empaquetado:** los últimos cambios del frontend y del panel se copiaron al contenedor `nb-app`; falta reconstruir la imagen para que persistan si se recrea el contenedor.
+**Verificado con el nodo registrado (2026-11-23)**
+- **Publicación inmediata:** al bajar la humedad del suelo a 10 % la bomba se enciende y el nodo publica su telemetría en el mismo instante (+~0,2 s de espera del modelo de radio), sin esperar al intervalo.
+- **Contadores del plano de usuario:** los de `ogstun` (`/api/lab/upstats`) suben con el nodo registrado y publicando (por ejemplo, subida 766 → 768 paquetes en 5 s con una publicación y su confirmación), y la tarjeta «Registro del plano de usuario» muestra la variación junto a cada mensaje de datos. Los contadores cuentan todo el tráfico del núcleo, no solo el del nodo.
 
 ---
 
 ## 7. Limitaciones (para responder con honestidad)
 
-- **No se prueba la capa física**: la radio es falsa; no hay modulación, potencia ni cobertura.
+- **No se prueba la capa física**: la radio es falsa; no hay modulación ni potencia reales. La cobertura, las repeticiones, la latencia y la energía **se modelan** (no se miden): ver [`radio-nbiot.md`](radio-nbiot.md).
 - **Un UE por arranque de OAI**: cada registro reinicia el eNB (~45 s).
 - Los ganchos de prueba **no están en la imagen de producción**; viven en `nb-oai-lab`.
 - La electrónica del ESP32 y los sensores no se simulan; se simula su lógica.
@@ -183,22 +182,30 @@ Después: abrir cada bloque (UE, RAN, Núcleo), mover el nivel de humedad en el 
 | Rutas del panel | `app/main.py` (`/api/lab/*`) |
 | Frontend | `app/web/src/lab/`, `app/web/src/tabs/Lab.tsx` |
 | Corrección del S1AP | `docker/oai-nbiot/patch-s1ap.py` |
+| Radio NB-IoT de la celda y su modelo | [`radio-nbiot.md`](radio-nbiot.md) |
 
-## Radio NB-IoT de la celda (pestaña RAN)
+---
 
-La vista de la RAN muestra y permite cambiar los parámetros de radio del eNB de OAI del laboratorio. Hay que separar lo real de lo modelado.
+## 10. Referencia de `app/simlab/`
 
-**Real (lo carga OAI).** Banda (B3, B7, B8, B20, B28) con sus frecuencias DL/UL y EARFCN, portadora LTE anfitriona (`N_RB_DL`: 6 a 100 PRB), ganancia de TX, periodicidad de NPRACH, repeticiones de NPDCCH del acceso aleatorio y ciclo de paging. El panel guarda la elección en `data/lab-radio.json`. `scripts/oai-lab-start.sh` ejecuta `lab/oai-fakerf/radio_cfg.py`, que la escribe en `/tmp/enb.conf` y deja lo cargado en `data/lab-radio.applied.json`. OAI solo lee su `.conf` al arrancar: **«Aplicar a OAI» reinicia el eNB** (~45 s) y el nodo debe registrarse de nuevo. El panel distingue «guardado» de «aplicado» y lista los cambios pendientes. `inject.c` informa al eNB de la banda real del UE (`OAI_UE_BAND`).
+| Archivo | Hilos / mecanismo | Qué hace |
+|---|---|---|
+| `server.py` | FastAPI; `SCENARIOS` ejecutados en hilos | API interna: `/state`, `/events`, `/reset`, `/provision`, `/scenario/*` (registrar, clon, intruso, baja), `/node/env`, `/node/ping`, `/node/firmware`, `/oai/log`. Nodo `riego-01` (IMSI `001010000010001`); intruso con otro IMSI |
+| `oai.py` | Clase `OaiUE.run()` | Espera `SETTLE_S`, inyecta por UDP 9100 los mensajes de subida con el NAS dentro (`SC`→`UT`→`UC`→`RC`), lee del registro de OAI los NAS que baja el MME, detecta caídas por el id de arranque del log y reintenta (máx. 2) |
+| `nas.py` | `NasUE` | NAS de verdad: `_auth_req` (Milenage), `_smc` (EIA2), `_protect`, `_accept_nas`. Genera el *Attach Request*, *Authentication Response*, *Security Mode Complete*; procesa el *Attach Accept* y el *Detach* |
+| `net.py` | `UserPlane`: hilos de lectura TUN y UDP 9102 | Crea `simue0` con la IP asignada, una regla `ip rule from <ip> lookup 100` y la ruta por defecto en la tabla 100 (se reaplica con `ip route replace`: Linux la borra si la interfaz pierde su última IP). Los hilos toleran `OSError` para no morir |
+| `node.py` | `IrrigationNode`: hilo de física y de control | Espejo del firmware: suelo, tanque, bomba, DHT22, HC-SR04; consola de comandos AT; cliente MQTT enlazado a la IP del módulo y ping ICMP real. `_pump(on, why, notify=True)` publica **al instante** al cambiar la bomba |
+| `riego-nbiot.ino` | — | Firmware C que el laboratorio muestra y resalta en la vista del UE; coincide con la lógica de `node.py` |
+| `crypto.py` | — | Milenage (TS 35.206), KDF de claves LTE (TS 33.401), EIA2 (AES-CMAC) y AUTS para la resincronización |
+| `bus.py` | — | Bus de eventos con campos `seq`, `dev`, `stage`, `proto`, `src`, `dst`, `ok`, `label`, `detail` (`emit(...)`) que alimenta la traza |
+| `radio.py` | — | Radio del laboratorio: parámetros de la celda (banda, PRB, NPRACH, NPDCCH, paging, ganancia), lo guardado frente a lo aplicado en OAI, y el modelo de consecuencias (RSRP, cobertura, esperas, energía). Ver [`radio-nbiot.md`](radio-nbiot.md) |
 
-**Modelo (`app/simlab/radio.py`, no medido).** Con radio falsa no hay señal que degradar, así que se calcula: pérdida de propagación (espacio libre a 1 m + exponente 3), RSRP con 20 dBm + ganancia, nivel de cobertura (CE0 ≥ −105, CE1 ≥ −115, CE2 ≥ −128 dBm; 1, 8 y 64 repeticiones), tiempo en el aire (120 ms por repetición) y energía (0,8 W transmitiendo). Consecuencias sobre el nodo simulado:
 
-| Parámetro | Efecto |
-|---|---|
-| Banda que el módulo no soporta (p. ej. B7) | `AT+CBANDCFG` falla, el módulo no encuentra la celda y el registro no se intenta |
-| Distancia (se aplica al instante, sin reiniciar) | Cambia el RSRP y el nivel de cobertura; fuera de −128 dBm el nodo no transmite ni recibe |
-| Nivel de cobertura | Cada mensaje se repite y tarda más en el aire; sube la energía por mensaje |
-| NPRACH | El mensaje de subida espera hasta la siguiente oportunidad de preámbulo |
-| Ciclo de paging | Una orden del celular espera hasta la siguiente ocasión de paging antes de llegar al nodo |
-| `N_RB_DL` | Solo cambia la portadora anfitriona; no altera la velocidad por nodo |
 
-Las bandas NB-IoT del SIM7080G salen de listados de terceros (Waveshare, M5Stack, everythingrf) y faltan de confirmar con la hoja de datos de SIMCom.
+**Concurrencia a tener en cuenta:** el nodo (`node.py`), la lectura TUN, la recepción UDP 9102 y los escenarios corren en hilos de `simlab`; el estado compartido se protege con bloqueos y el bus de eventos. En OAI, el inyector corre en hilos propios (`pthread`, `detach`) separados de los hilos de tiempo real.
+
+**Aislamiento:** `simlab` reutiliza la imagen del panel (sin imagen nueva) pero es otro contenedor con `NET_ADMIN` y `/dev/net/tun`. El panel no recibe esos permisos.
+
+## 11. Cómo extender el laboratorio
+
+**Un escenario nuevo:** función en `simlab/server.py`, registrarla en `SCENARIOS` y añadir el botón en `SCEN` de `tabs/Lab.tsx`. Si necesita un eNB recién arrancado, añadir su ruta a `OAI_SCENARIOS` en `main.py`.

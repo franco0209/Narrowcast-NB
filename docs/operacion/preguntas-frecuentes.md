@@ -1,4 +1,4 @@
-# Preguntas recurrentes
+# Preguntas frecuentes
 
 Respuestas breves a las preguntas que más se repiten sobre el proyecto, agrupadas por tema. Cada respuesta remite al documento donde está el detalle. Las preguntas que antes estaban repartidas en la guía de fundamentos, en la integración con OAI/Open5GS, en el código por dentro y en las modificaciones se reunieron aquí; si una pregunta aparecía en varios sitios se unificó en una sola respuesta.
 
@@ -71,7 +71,7 @@ El USRP es la radio SDR que convierte entre señal digital y RF. UHD es su contr
 Radio apagada por defecto, plan validado (banda, ganancia, atenuación, duración, portadora libre, autorizado por), confirmación humana, corte automático y registro. No mide potencia: eso requiere un analizador de espectro.
 
 **¿Qué hallazgo importante hubo con la ganancia?**
-El script suponía que `tx_gain` era atenuación y en realidad OAI lo pasa como ganancia a UHD. Se corrigió leyendo el código ([`integracion-oai-open5gs.md`](../arquitectura/integracion-oai-open5gs.md) §3.5); falta medir la potencia real.
+El script suponía que `tx_gain` era atenuación y en realidad OAI lo pasa como ganancia a UHD. Se corrigió leyendo el código ([`oai.md`](../arquitectura/oai.md), «Un hallazgo sobre `tx_gain`»); falta medir la potencia real.
 
 **¿Qué pasa si el procesamiento de OAI no llega a tiempo?**
 Si el hilo `rxtx` sigue ocupado cuando llega la siguiente subtrama (tras ~5 ms), llama a `exit_fun("TX thread busy")` y el eNB termina. Por eso necesita CPU dedicada y prioridad de tiempo real.
@@ -105,7 +105,7 @@ Con srsRAN prueba el núcleo; con `fake_device.py`, el broker y el panel; con el
 
 ## 5. Código: lenguajes, hilos y comunicación
 
-Detalle en [`codigo-por-dentro.md`](../arquitectura/codigo-por-dentro.md).
+Detalle en [`open5gs.md`](../arquitectura/open5gs.md) y [`oai.md`](../arquitectura/oai.md).
 
 **¿En qué lenguaje están hechos?**
 Open5GS y OAI en **C** (OAI usa **C++** solo para el controlador del USRP). El panel en **Python**, su interfaz en **TypeScript/React**, el firmware en **C++ de Arduino**, la orquestación en **YAML** y **Bash**.
@@ -146,13 +146,16 @@ Detalle, tabla de cambios y cómo comprobarlos: [`modificaciones-oai-open5gs.md`
 
 ## 7. Laboratorio
 
-Detalle: [`implementacion.md`](../laboratorio/implementacion.md).
+Detalle: [`implementacion.md`](../laboratorio/implementacion.md) y [`radio-nbiot.md`](../laboratorio/radio-nbiot.md).
 
 **¿Qué es real y qué es simulado en el Laboratorio?**
 Real: Open5GS completo, el RRC/S1AP/GTP-U/MAC de OAI, el NAS (Milenage, EIA2) y los datos MQTT por el túnel GTP-U. Simulado: la radio (Uu), el acceso aleatorio (uno por arranque de OAI) y la electrónica del ESP32.
 
 **¿Por qué el registro del núcleo no muestra nada cuando el nodo publica?**
 Porque los datos viajan por el plano de usuario (GTP-U) y el plano de control no interviene. La prueba de que el paquete cruzó OAI y el núcleo son los contadores de `ogstun` del PGW-U, que muestra la tarjeta «Registro del plano de usuario».
+
+**¿Qué cambia si cambio la banda, el ancho de banda o la distancia del nodo en el Laboratorio?**
+Los parámetros de la celda (banda, PRB, ganancia, NPRACH, NPDCCH, paging) se escriben de verdad en el `.conf` de OAI, que solo los lee al arrancar: «Aplicar» reinicia el eNB y el nodo debe registrarse de nuevo. Como la radio es falsa, sus **consecuencias** (nivel de señal, nivel de cobertura, repeticiones, latencia, energía, banda que el módulo no soporta) las calcula un modelo, no un equipo de medida. Detalle: [`radio-nbiot.md`](../laboratorio/radio-nbiot.md).
 
 **¿Por qué cada registro tarda ~45 s?**
 OAI simula un único acceso aleatorio por arranque, por lo que el panel reinicia el eNB antes de cada escenario y el simulador espera 40 s para evitar un fallo de OAI si se inyecta antes.
@@ -162,7 +165,7 @@ OAI simula un único acceso aleatorio por arranque, por lo que el panel reinicia
 ## 8. Estado y trabajo futuro
 
 **¿Qué tan lejos está de funcionar con una SIM real?**
-Todo el software de la ruta S1/EPC funciona; falta (1) un USRP, (2) la autorización de RF y (3) probar que el módulo NB-IoT se registre, que es el punto con más incertidumbre por la antigüedad de la rama de OAI. Tabla completa en [`verificacion.md`](verificacion.md).
+Todo el software de la ruta S1/EPC funciona; falta (1) un USRP, (2) la autorización de RF y (3) probar que el módulo NB-IoT se registre, que es el punto con más incertidumbre por la antigüedad de la rama de OAI. Tabla completa en [`estado.md`](../proyecto/estado.md).
 
 **¿Qué mejoraría el proyecto?**
 Medir la potencia con analizador de espectro, probar con módulo real, verificar PSM/eDRX y las optimizaciones CIoT, y evaluar la rama `nb-iot-ubuntu24` de OAI como alternativa.

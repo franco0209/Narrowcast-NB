@@ -1,26 +1,26 @@
 # Fundamentos: entender Narrowcast-NB desde cero
 
-Esta guía reúne los **fundamentos para entender y explicar el proyecto**: qué problema resuelve, qué es NB-IoT, qué es Open5GS, qué es OpenAirInterface (OAI), qué hace el código propio y cómo se conecta todo. Parte de los conceptos básicos y va subiendo de nivel. Los detalles de código, IP y puertos ya están en otros documentos; aquí se enlazan en vez de repetirse.
+Esta guía reúne lo necesario para **entender** el proyecto desde cero: qué problema resuelve, qué es NB-IoT, cómo es una red celular, qué es una SIM, un SDR y Docker, cómo funciona el sistema de punta a punta, qué decisiones se tomaron, un glosario y ejercicios. No repite el detalle técnico: lo enlaza.
+
 
 | Si quieres… | Lee |
 |---|---|
-| Entender el contexto y los conceptos | Esta guía, §1 a §5 |
-| Saber qué hace cada pieza de terceros | §6 (Open5GS) y §7 (OAI) |
-| Saber qué es propio y cómo funciona de punta a punta | §8 a §11 |
-| Consultar estado, glosario, preguntas y ejercicios | §13 (estado de verificación), §14 (glosario), §15 (preguntas recurrentes), §16 (ejercicios) |
-| Ver funciones, archivos y líneas concretas | [`integracion-oai-open5gs.md`](../arquitectura/integracion-oai-open5gs.md) |
-| Entender el código: lenguajes, hilos, colas, semáforos, comunicación e interfaces | [`codigo-por-dentro.md`](../arquitectura/codigo-por-dentro.md) |
+| Una primera visión y un mapa de lectura, sin conocimientos previos de NB-IoT | [`introduccion.md`](introduccion.md) |
+| Entender el contexto y los conceptos | Esta guía |
+| Saber qué hace Open5GS o OAI y cómo funcionan por dentro | [`open5gs.md`](../arquitectura/open5gs.md) y [`oai.md`](../arquitectura/oai.md) |
+| Ver IP, puertos, MQTT y suscriptores | [`vision-general.md`](../arquitectura/vision-general.md) |
+| Ver cómo se unen las piezas y cómo viaja un dato | [`integracion.md`](../arquitectura/integracion.md) |
 | Saber qué se modificó de Open5GS y OAI | [`modificaciones-oai-open5gs.md`](../arquitectura/modificaciones-oai-open5gs.md) |
-| Probar todo el flujo sin hardware (pestaña **Laboratorio**) | [`panel.md` §7](../operacion/panel.md) y la guía «Laboratorio» de la pestaña Ayuda |
-| Ver IP, puertos, interfaces y reglas RF | [`arquitectura.md`](../arquitectura/arquitectura.md) |
-| Ver cómo se construye el panel | [`panel.md`](../operacion/panel.md) |
-| Ver Docker y compilación | [`docker-y-compilacion.md`](../operacion/docker-y-compilacion.md) |
+| Poner el sistema en marcha | [`puesta-en-marcha.md`](../operacion/puesta-en-marcha.md) |
+| Probar todo sin hardware | [`implementacion.md`](../laboratorio/implementacion.md) y la guía «Laboratorio» de la pestaña Ayuda |
+| Ver el estado de verificación | [`estado.md`](../proyecto/estado.md) |
+| Resolver dudas rápidas | [`preguntas-frecuentes.md`](../operacion/preguntas-frecuentes.md) |
 
-Convención: lo que afirmo sobre el funcionamiento del proyecto está comprobado en este repositorio. Lo que es teoría general (3GPP, NB-IoT) es conocimiento estándar. Lo que **no** se ha probado con hardware real se marca como *sin verificar* (resumen en §13 y [`verificacion.md`](../referencia/verificacion.md)).
+Convención: lo que se afirma sobre el funcionamiento del proyecto está comprobado en este repositorio. Lo que es teoría general (3GPP, NB-IoT) es conocimiento estándar. Lo que **no** se ha probado con hardware real se marca como *sin verificar*.
 
 ---
 
-## 1. El proyecto en un minuto
+## El proyecto en un minuto
 
 **Narrowcast-NB** es una red celular privada de NB-IoT hecha con software libre. Una red celular tiene siempre las mismas partes: un **dispositivo** con SIM, una **estación base** que habla por radio con él, un **núcleo de red** que autentica, controla y reenvía el tráfico, y una **aplicación** al final. Normalmente todo menos el dispositivo lo pone un operador (Movistar, Claro…). Aquí lo montamos nosotros:
 
@@ -44,15 +44,14 @@ Qué es propio y qué es de terceros (la pregunta más importante del proyecto):
 | Aprovisionamiento de suscriptores | **Propio** |
 | Traducción del plan RF a la configuración del eNB, y reglas de seguridad de RF | **Propio** |
 | Panel web (API, diagramas animados, módulos) | **Propio** |
+| Laboratorio didáctico (simulador del nodo, radio falsa e inyector para OAI, vistas UE/RAN/núcleo, modelo de radio) | **Propio** |
 | Firmware del ESP32 y simulador de dispositivo | **Propio** (usa la biblioteca TinyGSM) |
 
 Resumen honesto: **no programamos un protocolo celular**. Integramos, configuramos, protegemos y observamos dos proyectos que ya lo implementan. Ese trabajo de integración, que hay que entender a fondo, es el aporte.
 
----
+## Fundamentos: de IoT a la red celular
 
-## 2. Fundamentos: de IoT a la red celular
-
-### 2.1 IoT y LPWAN
+### IoT y LPWAN
 
 IoT (Internet de las Cosas) son dispositivos pequeños (sensores, medidores) que envían pocos datos de vez en cuando. Sus necesidades son distintas a las de un teléfono:
 
@@ -63,11 +62,11 @@ IoT (Internet de las Cosas) son dispositivos pequeños (sensores, medidores) que
 
 Las redes **LPWAN** (Low Power Wide Area Network) están hechas para eso. Hay de dos tipos: las que usan espectro libre (LoRa/LoRaWAN, Sigfox) y las **celulares** (NB-IoT y LTE-M), que usan espectro licenciado de un operador y la infraestructura celular existente, con SIM, seguridad y roaming.
 
-### 2.2 3GPP y las generaciones
+### 3GPP y las generaciones
 
 **3GPP** es el consorcio que escribe los estándares celulares. Los estándares se publican por versiones (*Release*). 4G es **LTE** (EPC como núcleo), 5G es NR (5GC como núcleo). NB-IoT apareció en el **Release 13** (2016) como parte de LTE, no de 5G, aunque se mantiene en 5G como tecnología IoT.
 
-### 2.3 Qué es NB-IoT
+### Qué es NB-IoT
 
 **NB-IoT** (*Narrowband IoT*) es una variante de LTE reducida para IoT:
 
@@ -94,7 +93,7 @@ Canales físicos de NB-IoT (aparecen en el código de OAI como archivos `*_NB_Io
 
 Optimizaciones **CIoT** (Cellular IoT) del núcleo, definidas en 3GPP: enviar datos pequeños dentro de los mensajes de señalización (NAS) sin crear la portadora de datos clásica, y negociar PSM/eDRX en el registro. En este proyecto **no se han verificado con la combinación OAI + Open5GS**; se usa el registro 4G convencional.
 
-### 2.4 La arquitectura LTE/EPC y su vocabulario
+### La arquitectura LTE/EPC y su vocabulario
 
 | Término | Qué es |
 |---|---|
@@ -113,7 +112,7 @@ Optimizaciones **CIoT** (Cellular IoT) del núcleo, definidas en 3GPP: enviar da
 | **AS** | Mensajes entre UE y eNB (RRC, radio) |
 | **RRC** | Control de la conexión de radio (establecer, reconfigurar, liberar) |
 
-Funciones del EPC (cada una es un proceso de Open5GS, ver §6):
+Funciones del EPC (cada una es un proceso de Open5GS, ver [`open5gs.md`](../arquitectura/open5gs.md)):
 
 - **MME**: el "cerebro" de señalización. Acepta eNB, autentica UE, negocia seguridad, pide la sesión, hace *paging* (busca al UE).
 - **HSS**: la base de datos de suscriptores y el "centro de autenticación".
@@ -123,9 +122,7 @@ Funciones del EPC (cada una es un proceso de Open5GS, ver §6):
 
 SGW y PGW se dividen en **-C** (control, decide) y **-U** (usuario, reenvía paquetes). Se hablan por **PFCP**.
 
----
-
-## 3. La SIM y la autenticación
+## La SIM y la autenticación
 
 La seguridad de una red celular se basa en un **secreto compartido** entre la SIM y el HSS, que nunca viaja por el aire:
 
@@ -148,17 +145,13 @@ Cómo se autentican mutuamente (**EPS-AKA con el algoritmo Milenage**):
 
 Consecuencia práctica, clave en el proyecto: **K y OPc de la SIM física deben ser idénticos a los del suscriptor cargado en MongoDB**. Si no, la autenticación falla y el módulo no se registra. Por eso el panel tiene un módulo de **Suscriptores** y por eso K y OPc nunca se muestran de vuelta en pantalla.
 
----
-
-## 4. Radio definida por software (SDR)
+## Radio definida por software (SDR)
 
 Una estación base comercial usa hardware dedicado. Aquí se usa **SDR** (*Software Defined Radio*): el procesamiento de señal (modulación, codificación, protocolos) lo hace un **programa** en un PC (OAI), y un equipo genérico, el **USRP** de Ettus Research, solo convierte entre señal digital y radiofrecuencia (conversores ADC/DAC y amplificadores). El PC y el USRP se comunican por la biblioteca **UHD** (USRP Hardware Driver) por USB o red.
 
-Ventajas: flexible y barato, ideal para investigación. Desventajas: el PC debe cumplir plazos de tiempo real (OAI usa hilos de tiempo real) y **la potencia de salida depende del modelo y de la ganancia configurada**, por lo que no es seguro asumir cuánto emite sin medirlo. De ahí las reglas de RF (§10).
+Ventajas: flexible y barato, ideal para investigación. Desventajas: el PC debe cumplir plazos de tiempo real (OAI usa hilos de tiempo real) y **la potencia de salida depende del modelo y de la ganancia configurada**, por lo que no es seguro asumir cuánto emite sin medirlo. De ahí las reglas de RF ([`seguridad-rf.md`](../operacion/seguridad-rf.md)).
 
----
-
-## 5. Docker en este proyecto
+## Docker en este proyecto
 
 **Docker** empaqueta un programa con sus dependencias en un contenedor, y **Docker Compose** levanta varios contenedores de un solo archivo (`compose.yaml`). Aquí se usa porque:
 
@@ -168,84 +161,9 @@ Ventajas: flexible y barato, ideal para investigación. Desventajas: el PC debe 
 
 Los perfiles de Compose (`sim`, `radio`) permiten activar piezas opcionales: `sim` agrega radio virtual para pruebas, `radio` el eNB real, que además **nunca arranca solo** (solo lo enciende el panel).
 
----
+## Cómo funciona el proyecto de punta a punta
 
-## 6. Open5GS en profundidad
-
-### 6.1 Qué es
-
-**Open5GS** es una implementación **de código abierto, escrita en C**, de los núcleos de red **4G (EPC)** y **5G (5GC)** según 3GPP. Es mantenido principalmente por Sukchan Lee y una comunidad, y se usa mucho en redes privadas, laboratorios y proyectos de investigación. Su licencia es AGPL-3.0 (comprobado en el `LICENSE` del código que usa el proyecto). Aquí se usa la versión **v2.7.5**.
-
-No contiene radio ni estación base: solo el núcleo. Por eso necesita un eNB aparte (aquí OAI, o srsRAN en las pruebas virtuales).
-
-### 6.2 Qué parte se usa
-
-Solo el **EPC 4G**, porque la rama NB-IoT de OAI habla S1AP (4G). Las funciones 5G se compilan pero no se arrancan.
-
-Tabla de funciones, binarios y archivos de configuración: ver [`arquitectura.md` §3](../arquitectura/arquitectura.md#3-open5gs-qué-partes-se-usan) (MME, HSS, SGW-C/U, PGW-C/U y PCRF).
-
-Dato curioso útil: en modo EPC, Open5GS reutiliza los programas 5G `smfd` y `upfd` para hacer de PGW-C y PGW-U. Lo que decide el rol es la configuración (`gtpc`/`freeDiameter` en vez de `sbi`).
-
-### 6.3 Cómo funciona por dentro (resumen)
-
-- Cada función es **un proceso** con un bucle de eventos (epoll) y una **máquina de estados**. Los mensajes de red se convierten en eventos y se despachan a la máquina de estados correspondiente.
-- El MME tiene máquinas de estados anidadas: una por eNB (S1AP), una por UE (EMM, el registro) y una por sesión (ESM).
-- Los protocolos están en bibliotecas propias: S1AP, NAS, GTP, PFCP, Diameter (con **freeDiameter**) y criptografía (Milenage).
-- Los suscriptores se leen de **MongoDB** en cada procedimiento, de modo que un suscriptor nuevo vale sin reiniciar.
-
-Referencia de funciones y archivos: [`integracion-oai-open5gs.md` §2](../arquitectura/integracion-oai-open5gs.md).
-
-### 6.4 Lo que hace el proyecto sobre Open5GS (sin modificar su código)
-
-1. **Compilarlo** en una imagen reproducible (versión y *commit* exactos).
-2. **Configurarlo** con siete YAML: PLMN `001/01`, TAC `1`, IP de cada función, subred de UE `10.58.0.0/16`, orden de algoritmos de seguridad.
-3. **Entrypoint propio** (`docker/open5gs/entrypoint.sh`): crea la interfaz TUN `ogstun`, le asigna `10.58.0.1/16`, activa NAT (`MASQUERADE`) y reescribe las direcciones de freeDiameter, que por defecto apuntan a `localhost`.
-4. **Alimentar su base de datos** con el aprovisionamiento y el módulo Suscriptores.
-
----
-
-## 7. OpenAirInterface (OAI) en profundidad
-
-### 7.1 Qué es
-
-**OpenAirInterface** es un proyecto abierto, originado en **EURECOM** (Francia) y hoy impulsado por la *OpenAirInterface Software Alliance* (OSA), que implementa **toda la pila celular en software**: eNB/gNB (estación base), UE y núcleo, para 4G y 5G, sobre hardware SDR. Es de los pocos proyectos abiertos con **capa física completa**. Se escribe en C y se organiza en `openair1` (capa física), `openair2` (MAC, RLC, PDCP, RRC) y `openair3` (interfaz con el núcleo: S1AP, SCTP, GTP-U). Su licencia es propia, la *OAI Public License v1.0* (comprobado en el `LICENSE` de la rama usada).
-
-### 7.2 La rama NB-IoT y por qué importa
-
-OAI principal no trae NB-IoT. Hay una rama, **`develop-nb-iot`**, que lo agrega al **eNB** (no al UE ni al EPC). Su último *commit* es de 2020. Es la única implementación abierta de NB-IoT en el lado de la estación base que se conoce con capa física, y por eso se eligió, aunque con consecuencias:
-
-- Duplica las estructuras de LTE en versiones `_NB_IoT` (más de 150 archivos), en lugar de integrarse.
-- Solo compila en Ubuntu 14.04/16.04 (de ahí `ubuntu:16.04` en el Dockerfile) y exige parches menores (versión de `protobuf-c`).
-- Se probó por sus autores con módulos Quectel BC95 y un núcleo comercial, **no con Open5GS**.
-
-Esa última frase es el **principal riesgo técnico** del proyecto: S1 con Open5GS se verificó sin radio, pero que un módulo real termine el registro con esta pareja no está probado.
-
-### 7.3 Qué parte se usa
-
-Solo el ejecutable del eNB, `lte-softmodem`. Su pila, de arriba a abajo:
-
-Tabla de capas del eNB (S1AP/SCTP, GTP-U, RRC, PDCP, RLC, MAC, PHY NB-IoT, UHD): ver [`arquitectura.md` §4](../arquitectura/arquitectura.md#4-openairinterface-qué-partes-se-usan).
-
-El eNB es, en esencia, un **traductor**: hacia abajo habla radio NB-IoT con el módulo; hacia arriba habla S1AP/GTP-U con el núcleo. Para el núcleo, es un eNB cualquiera.
-
-### 7.4 Lo que hace el proyecto sobre OAI (sin modificar su lógica)
-
-1. **Compilarlo** en una imagen reproducible (con el parche de `protobuf-c`).
-2. **Configurarlo** con una plantilla (`config/oai/enb.nbiot.conf.tmpl`): PLMN, TAC, IP del MME, 50 PRB, 1 antena.
-3. **Generar la configuración desde el plan RF** (`scripts/oai-enb-start.sh`): banda, frecuencia y ganancia se toman del plan validado, se calcula el desplazamiento de subida según la banda y se lanza `lte-softmodem`.
-4. **Proteger la emisión**: el eNB solo arranca desde el panel con plan válido y autorización.
-
-Hallazgo para contar: una versión inicial del script trataba `tx_gain` como atenuación (`90 − tx_gain`), lo que habría pedido casi la máxima potencia con un valor "seguro". Leyendo el código de OAI se comprobó que `tx_gain` llega tal cual a `set_tx_gain` de UHD como **ganancia**, y se corrigió. Sigue pendiente medir la potencia real con un analizador de espectro. Detalle en [`integracion-oai-open5gs.md` §3.5](../arquitectura/integracion-oai-open5gs.md).
-
-### 7.5 srsRAN: el "eNB virtual" de pruebas
-
-Para validar el núcleo **sin emitir radio** se usa **srsRAN 4G**, otra pila celular libre. Con el perfil `sim`, un eNB (`srsenb`) y un UE (`srsue`) se conectan por **ZeroMQ** (un socket TCP en vez de radio) y el eNB habla S1 con Open5GS por la red Docker. Es LTE normal, no NB-IoT: **valida el núcleo, no la radio de OAI**. `scripts/validate.sh` comprueba S1 Setup, registro, IP del UE y un `ping` por el túnel.
-
----
-
-## 8. Cómo funciona el proyecto de punta a punta
-
-### 8.1 Arranque del sistema
+### Arranque del sistema
 
 `docker compose up -d` levanta, en orden de dependencias:
 
@@ -257,36 +175,7 @@ Para validar el núcleo **sin emitir radio** se usa **srsRAN 4G**, otra pila cel
 
 El eNB real **no** arranca aquí: queda creado y apagado. El panel lo enciende.
 
-### 8.2 Registro de un dispositivo (attach)
-
-1. El módulo busca celdas, se sincroniza (NPSS/NSSS), lee la información de la celda (NPBCH, SIB-NB) y pide acceso por **NPRACH**.
-2. Se establece la conexión **RRC** con el eNB. El *Attach Request* NAS viaja dentro.
-3. El eNB lo reenvía al MME en un `Initial UE Message` (**S1AP**).
-4. El MME pide al HSS el vector de autenticación (**S6a/Diameter**). El HSS lee K y OPc de MongoDB y calcula con Milenage.
-5. Autenticación mutua con el módulo y negociación de seguridad NAS.
-6. El MME pide la sesión (**S11 → S5-C**, GTPv2-C). El PGW-C consulta al PCRF (**Gx**), **reserva una IP de `10.58.0.0/16`** y programa SGW-U y PGW-U por **PFCP**.
-7. El MME responde al eNB (*Initial Context Setup*) con el *Attach Accept*, que lleva la IP.
-8. El módulo confirma; el túnel **GTP-U** queda completo.
-
-El panel reproduce este procedimiento paso a paso en la pestaña **Núcleo**.
-
-### 8.3 Un dato de temperatura, hacia arriba
-
-```
-ESP32 lee el DHT22 ─ publica JSON en nb/<id>/telemetry (MQTT por AT)
-  → módulo NB-IoT ~~ radio (NPUSCH) ~~ eNB (PHY→MAC→RLC→PDCP)
-  → GTP-U (UDP 2152) → SGW-U → PGW-U → interfaz ogstun → NAT
-  → Mosquitto (10.44.0.5:1883) → panel (suscrito a nb/+/telemetry)
-  → evento SSE → navegador: tarjeta y gráfico
-```
-
-### 8.4 Una orden hacia abajo (encender el LED)
-
-El panel publica `{"led": true}` en `nb/<id>/cmd` → Mosquitto → por la conexión TCP/MQTT que el dispositivo mantiene abierta → PGW-U (busca la sesión por IP del UE) → GTP-U → eNB → radio → ESP32 (`onMessage`). El dispositivo responde con su estado en la siguiente telemetría.
-
-Pendiente de verificar con tráfico real: la ruta de retorno entre el broker y la subred de UE. Lo esperable es que funcione porque el NAT hace que el broker vea la conexión como proveniente del PGW-U.
-
-### 8.5 MQTT en una línea
+### MQTT en una línea
 
 MQTT es un protocolo de mensajería **publicar/suscribir** muy liviano, ideal para IoT. Nadie habla directamente con nadie: todos hablan con el **broker** (Mosquitto) y se intercambian mensajes por **tópicos**.
 
@@ -298,45 +187,25 @@ MQTT es un protocolo de mensajería **publicar/suscribir** muy liviano, ideal pa
 
 *QoS 1* garantiza entrega al menos una vez. El *last will* es un mensaje que el broker publica solo si el dispositivo se cae sin despedirse: así el panel detecta la desconexión.
 
-### 8.6 El panel
+El registro de un dispositivo y el recorrido de un dato, con las funciones de cada paso, están en [`integracion.md`](../arquitectura/integracion.md). El panel está descrito en [`panel.md`](../operacion/panel.md).
 
-Un solo proceso **FastAPI** (Python) que integra cinco fuentes: **Docker** (estado y registros de contenedores; encender/apagar el eNB), **MongoDB** (CRUD de suscriptores, sin devolver K ni OPc), **MQTT** (telemetría y órdenes), **scripts** (validación del plan RF) y el **navegador** (eventos en vivo por **SSE**, *Server-Sent Events*). El frontend es JavaScript sin librerías: `diagram.js` dibuja los diagramas animados, `modules.js` implementa las pestañas.
-
-Detalle clave: para saber si el eNB está conectado, el panel **lee los registros del MME** y busca la línea `eNB-S1 accepted`. Observa a Open5GS sin modificarlo.
-
-Pestañas: Resumen (mapa animado), Suscriptores, Núcleo, eNB, Radio, Dispositivo y Ayuda. Ver [`panel.md`](../operacion/panel.md).
-
----
-
-## 9. Real o simulado
+## Real o simulado
 
 | Pieza | Real | Simulado |
 |---|---|---|
 | Núcleo Open5GS, MongoDB, Mosquitto, panel | Siempre real | — |
 | Radio | USRP + OAI NB-IoT (requiere equipo y autorización) | srsRAN con ZeroMQ (perfil `sim`), LTE sin emitir |
-| Dispositivo | ESP32 + SIM7080G | `fake_device.py`, que publica telemetría inventada directo al broker |
+| Dispositivo | ESP32 + SIM7080G | `fake_device.py`, que publica telemetría inventada directo al broker; en el Laboratorio, un nodo de riego cuya lógica imita el firmware |
+| ENB en el Laboratorio | — | OAI real (RRC, S1AP, GTP-U, MAC) con **radio falsa** y un inyector de mensajes; el núcleo y el NAS son reales, solo la capa física no |
+| Efectos de la radio (cobertura, repeticiones, latencia, energía) | Físicos, con USRP | **Modelados** en el Laboratorio ([`radio-nbiot.md`](../laboratorio/radio-nbiot.md)); no medidos |
 
 El simulador de dispositivo valida broker, panel y comandos, **pero no** el registro de la SIM ni el paso por el núcleo. El panel lo distingue con la marca `"sim": true` en la telemetría y la tarjeta *Equipos físicos*.
 
----
+## Seguridad de radiofrecuencia
 
-## 10. Seguridad de radiofrecuencia
+La radio está apagada por defecto y cada emisión pasa por un plan validado, confirmación humana, corte automático y registro. Detalle en [`seguridad-rf.md`](../operacion/seguridad-rf.md).
 
-Transmitir en una banda celular sin permiso puede interferir a operadores reales (incluidos servicios de emergencia) y es ilegal. Por eso **ni OAI ni Open5GS impiden emitir** y la protección la pone este proyecto, en capas:
-
-1. **Apagada por defecto**: si al arrancar el panel encuentra el eNB encendido, lo detiene.
-2. **Plan RF** (`data/rf-plan.yaml`) validado por `scripts/rf-check.sh`: bandas B3/B8/B20/B28, ganancia ≤ 30 dB, modo cable con atenuación ≥ 60 dB (antena solo con permiso escrito), duración de 1 a 600 s, portadora libre confirmada tras un barrido de espectro y nombre de quien autoriza.
-3. **Confirmación humana** en el panel: dos casillas (portadora libre, autorizado por) y mantener pulsado el botón 1,5 s; el panel envía a la API la confirmación `EMITIR`, que el servidor exige.
-4. **Corte automático** al cumplirse la duración.
-5. **Registro** de cada sesión en `data/logs/rf-sessions.csv`.
-
-Lo que **no** hace: medir potencia. Eso exige un analizador de espectro; el plan se valida, no se mide. Por eso se trabaja con cable y atenuador de ≥ 60 dB.
-
-También hay una cuestión de seguridad del propio panel: monta el socket de Docker (equivale a acceso de administrador del equipo), así que solo escucha en `127.0.0.1`.
-
----
-
-## 11. Decisiones de diseño y su razón
+## Decisiones de diseño y su razón
 
 | Decisión | Razón |
 |---|---|
@@ -344,15 +213,13 @@ También hay una cuestión de seguridad del propio panel: monta el socket de Doc
 | Open5GS como núcleo | Libre, liviano, mantenido, con configuración YAML simple y MongoDB para suscriptores |
 | OAI rama NB-IoT como eNB | Es la implementación abierta de NB-IoT con capa física completa |
 | Todo en Docker con IP fijas | OAI exige Ubuntu 16.04; reproducibilidad; configuraciones con direcciones literales |
-| Perfiles `sim` y `radio` | Permiten validar sin emitir radio |
+| Perfiles `sim`, `oailab` y `radio` | Permiten validar y practicar sin emitir radio |
 | MQTT con Mosquitto | Protocolo liviano estándar de IoT |
 | Plan RF + validación + corte automático | Cumplimiento legal y seguridad; el software de terceros no lo trae |
-| Panel propio (FastAPI, JS sin frameworks) | Operar, observar y *enseñar* la red; los diagramas explican el procedimiento |
-| Versiones y *commits* fijados | Reproducibilidad (ver [`docker-y-compilacion.md` §7](../operacion/docker-y-compilacion.md)) |
+| Panel propio (FastAPI + React/TypeScript) | Operar, observar y *enseñar* la red; los diagramas explican el procedimiento |
+| Versiones y *commits* fijados | Reproducibilidad (ver [`docker-y-compilacion.md`](../operacion/docker-y-compilacion.md), «Reproducibilidad y su límite») |
 
----
-
-## 12. Mapa del repositorio
+## Mapa del repositorio
 
 | Carpeta | Contenido |
 |---|---|
@@ -362,21 +229,14 @@ También hay una cuestión de seguridad del propio panel: monta el socket de Doc
 | `config/oai/` | Plantilla del eNB NB-IoT |
 | `config/srsran/` | Configuración del eNB/UE virtuales |
 | `provisioning/` | Alta del suscriptor de prueba |
-| `scripts/` | `rf-check.sh`, `rf-run.sh`, `oai-enb-start.sh`, `sim.sh`, `validate.sh` |
+| `scripts/` | `rf-check.sh`, `rf-run.sh`, `oai-enb-start.sh`, `oai-lab-start.sh`, `sim.sh`, `validate.sh` |
 | `mosquitto/` | Broker MQTT |
-| `app/` | Panel (`main.py`, `static/`) y `fake_device.py` |
+| `app/` | Panel: `main.py` (FastAPI), `web/` (React + TypeScript), `simlab/` (simulador del laboratorio) y `fake_device.py` |
+| `lab/oai-fakerf/` | Radio falsa, inyector y relevo de datos para el eNB de OAI del laboratorio |
 | `firmware/esp32-nbiot/` | Sketch del ESP32 |
 | `docs/` | Esta documentación |
 
----
-
-## 13. Qué está verificado y qué no
-
-La tabla de estado está en [`verificacion.md`](../referencia/verificacion.md). En resumen: la parte de software está implementada y validada hasta donde se puede sin hardware; falta la prueba con USRP, SIM y módulo reales.
-
----
-
-## 14. Glosario
+## Glosario
 
 | Término | Significado |
 |---|---|
@@ -429,23 +289,15 @@ La tabla de estado está en [`verificacion.md`](../referencia/verificacion.md). 
 | USRP | Radio SDR de Ettus Research |
 | Uu | Interfaz de radio UE ↔ eNB |
 
----
-
-## 15. Preguntas recurrentes
-
-Las preguntas frecuentes sobre el proyecto están reunidas en [`preguntas-recurrentes.md`](../referencia/preguntas-recurrentes.md).
-
----
-
-## 16. Ejercicios prácticos
+## Ejercicios prácticos
 
 Con el sistema levantado (`docker compose up -d`):
 
-1. **Ver los contenedores y sus IP:** `docker compose ps`. Relaciona cada `nb-*` con su función (§6.2).
+1. **Ver los contenedores y sus IP:** `docker compose ps`. Relaciona cada `nb-*` con su función (ver [`open5gs.md`](../arquitectura/open5gs.md)).
 2. **Ver una SIM en la base de datos:** `docker exec -it nb-mongo mongosh open5gs --eval 'db.subscribers.find({}, {imsi:1, "slice.session.name":1})'`. Identifica IMSI y APN.
 3. **Crear un suscriptor desde el panel** (pestaña Suscriptores) y comprobar que aparece en la WebUI (`:9999`). Se aprovecha que el HSS lee MongoDB en cada procedimiento.
 4. **Generar telemetría simulada:** `docker compose exec app python fake_device.py esp32-sim`. Ver tarjeta y gráfico en Dispositivo; mandar un comando LED y ver cómo llega.
-5. **Seguir el registro en vivo con radio virtual:** `docker compose --profile sim up -d`, luego `scripts/validate.sh`, y observar `docker logs nb-mme`, `nb-hss`, `nb-pgwc`. Identifica en los registros cada paso del attach (§8.2).
+5. **Seguir el registro en vivo con radio virtual:** `docker compose --profile sim up -d`, luego `scripts/validate.sh`, y observar `docker logs nb-mme`, `nb-hss`, `nb-pgwc`. Identifica en los registros cada paso del attach (ver el recorrido en [`integracion.md`](../arquitectura/integracion.md)).
 6. **Reproducir el attach paso a paso** en la pestaña Núcleo y asociar cada salto con una interfaz y un protocolo.
 7. **Probar la validación RF:** en la pestaña Radio, dejar un campo vacío (por ejemplo *autorizado por*) y ver qué comprobación falla. Nunca emitir sin autorización.
 8. **Leer una configuración:** abrir `config/open5gs/mme.yaml` y localizar PLMN, TAC y las IP; comparar con `config/oai/enb.nbiot.conf.tmpl`. Explicar qué pasa si el TAC no coincide.
@@ -464,8 +316,8 @@ Puntos que conviene poder explicar tras recorrer la guía:
 
 ---
 
-## 17. Cómo seguir
+## Cómo seguir
 
 - Lectura del estándar: 3GPP TS 23.401 (arquitectura EPC), TS 36.413 (S1AP), TS 29.272 (S6a), TS 33.401 (seguridad LTE), TS 36.211/36.213 (capa física; NB-IoT en las mismas series, Release 13).
 - Código: [Open5GS](https://github.com/open5gs/open5gs) y [OpenAirInterface](https://gitlab.eurecom.fr/oai/openairinterface5g) (rama `develop-nb-iot`).
-- Para ver el código real que usa este proyecto, ya compilado en las imágenes: `docker run --rm -it narrowcast-nb/open5gs:local bash` (código en `/opt/open5gs`, si la imagen conserva las fuentes) y recorrido guiado en [`integracion-oai-open5gs.md`](../arquitectura/integracion-oai-open5gs.md).
+- Para ver el código real que usa este proyecto, ya compilado en las imágenes: `docker run --rm -it narrowcast-nb/open5gs:local bash` (código en `/opt/open5gs`, si la imagen conserva las fuentes) y recorrido guiado en [`integracion.md`](../arquitectura/integracion.md).

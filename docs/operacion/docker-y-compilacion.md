@@ -1,6 +1,6 @@
 # Docker, imágenes y compilación
 
-Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente, con qué herramientas y versiones, cómo se orquesta con Docker Compose y qué variables controlan el comportamiento. Para la arquitectura, ver [`arquitectura.md`](../arquitectura/arquitectura.md).
+Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente, con qué herramientas y versiones, cómo se orquesta con Docker Compose y qué variables controlan el comportamiento. Para la arquitectura, ver [`vision-general.md`](../arquitectura/vision-general.md).
 
 ## 1. Lenguajes y herramientas de construcción
 
@@ -19,7 +19,7 @@ Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente
 | freeDiameter (S6a, Gx) | C, biblioteca externa con hilos propios | se enlaza en las funciones de Open5GS | `docker/open5gs/Dockerfile` |
 | UHD (controlador del USRP, Ettus) | C++ | se enlaza dentro de `lte-softmodem` | `docker/oai-nbiot/Dockerfile` |
 
-Archivos de configuración por componente: YAML en Open5GS (se leen con `libyaml`), `.conf` en freeDiameter y en OAI (libconfig), variables de entorno y YAML del plan RF en el panel, `secrets.h` en el firmware y `.env` en Compose. En C no hay clases: Open5GS y OAI las simulan con `struct`, punteros a función y convenciones de nombre (detalle en [`codigo-por-dentro.md`](../arquitectura/codigo-por-dentro.md) §1).
+Archivos de configuración por componente: YAML en Open5GS (se leen con `libyaml`), `.conf` en freeDiameter y en OAI (libconfig), variables de entorno y YAML del plan RF en el panel, `secrets.h` en el firmware y `.env` en Compose. En C no hay clases: Open5GS y OAI las simulan con `struct`, punteros a función y convenciones de nombre (detalle en [`vision-general.md`](../arquitectura/vision-general.md#clases-en-c)).
 
 ## 2. Imágenes
 

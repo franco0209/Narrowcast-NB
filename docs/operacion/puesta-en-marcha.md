@@ -1,6 +1,6 @@
 # Puesta en marcha
 
-Cómo levantar y operar el sistema paso a paso, y qué hacer ante los problemas frecuentes. El estado de cada fase está en [`estado-por-fases.md`](../proyecto/estado-por-fases.md).
+Cómo levantar y operar el sistema paso a paso, y qué hacer ante los problemas frecuentes. El estado de cada fase está en [`estado.md`](../proyecto/estado.md).
 
 Los comandos son de Linux (probado en Ubuntu) y se ejecutan desde la raíz del repositorio.
 
