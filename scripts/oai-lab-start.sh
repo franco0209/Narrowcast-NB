@@ -11,6 +11,9 @@ if [ "$(cat /opt/fake/.ready 2>/dev/null)" != "$SUM" ]; then
   echo "$SUM" > /opt/fake/.ready
 fi
 chmod 755 /data/oai-lab; : > /data/oai-lab/oai.log; chmod 644 /data/oai-lab/oai.log
+# Radio elegida en el panel: se escribe en el .conf (OAI solo lo lee al arrancar) y queda registrada como «aplicada»
+eval "$(python3 /lab/radio_cfg.py)"
+chmod 666 /data/lab-radio.applied.json 2>/dev/null || true
 cd /opt/oai/cmake_targets/lte_build_oai/build
 echo "[oai-lab] eNB arrancando id=$(date +%s)" >> /data/oai-lab/oai.log
 # OAI_RELAY_DL: dónde entrega OAI los paquetes IP de bajada (el simulador del nodo, que hace de dispositivo)

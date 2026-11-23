@@ -14,6 +14,8 @@ import time
 
 import paho.mqtt.client as mqtt
 
+from . import radio
+
 TANK_EMPTY_CM, TANK_FULL_CM = 30.0, 4.0
 MQTT_HOST_IP = "mosquitto"
 
@@ -40,6 +42,7 @@ class IrrigationNode:
         self._stop = threading.Event()
         self.thread = None
         self.lock = threading.Lock()
+        self._lost = False        # ya se avisó de que no hay cobertura
 
     # ------------------------------------------------------------------ mundo físico y configuración
     def reset_world(self):
@@ -99,18 +102,27 @@ class IrrigationNode:
     # ------------------------------------------------------------------ arranque del módulo (antes del registro)
     def modem_boot(self, sim_ok=True):
         self.fw("setup", "El ESP32 arranca y configura el módulo")
+        band = radio.applied()["band"]       # la banda en la que transmite la celda de OAI
+        okb = band in radio.MODULE_NB_BANDS
         for c, r in (("AT", "OK"), ("ATE0", "OK"), ("AT+CPIN?", "+CPIN: READY" if sim_ok else "+CME ERROR: SIM not inserted"),
-                     ("AT+CFUN=1", "OK"), ("AT+CNMP=38", "OK"), ("AT+CMNB=2", "OK"), ('AT+CBANDCFG="NB-IOT",3', "OK"), ('AT+CGDCONT=1,"IP","internet"', "OK")):
+                     ("AT+CFUN=1", "OK"), ("AT+CNMP=38", "OK"), ("AT+CMNB=2", "OK"),
+                     (f'AT+CBANDCFG="NB-IOT",{band}', "OK" if okb else "+CME ERROR: operation not supported"), ('AT+CGDCONT=1,"IP","internet"', "OK")):
             self.at(c, r, ok="ERROR" not in r)
             time.sleep(0.12)
 
-    def modem_registered(self, ip, ok=True, why=""):
-        if ok:
+    def modem_registered(self, ip, ok=True, why="", searching=False):
+        if searching:        # no hay celda utilizable: el módulo sigue buscando
+            self.fw("modemAttach", f"Sin red: {why}")
+            self.at("AT+CEREG?", "+CEREG: 0,2", False)
+            self.at("AT+CSQ", "+CSQ: 99,99", False)
+        elif ok:
             self.ip = ip
             self.fw("modemAttach", "El módulo se registró en la red (+CEREG: 0,1)")
             self.at("AT+CEREG?", "+CEREG: 0,1", True)
             self.at("AT+CNACT=0,1", f"+APP PDP: 0,ACTIVE", True)
             self.at("AT+CNACT?", f'+CNACT: 0,1,"{ip}"', True)
+            lk = radio.link()
+            self.at("AT+CSQ", f"+CSQ: {lk['csq']},99", True)
         else:
             self.fw("modemAttach", f"Registro rechazado: {why}")
             self.at("AT+CEREG?", "+CEREG: 0,3", False)
@@ -193,7 +205,23 @@ class IrrigationNode:
             return
         self.bus.emit(dev=self.id, stage="mqtt_rx", proto="MQTT", src="mosq", dst="ue", ok=True, detail={"topic": msg.topic, "orden": cmd},
                       label=f"Llega una orden del celular por MQTT: {json.dumps(cmd)}")
-        self.at(f'+SMSUB: "{msg.topic}","{json.dumps(cmd)}"', "", True)
+        lk = radio.link()
+        if not lk["coverage"]:
+            self.bus.emit(dev=self.id, stage="radio_lost", proto="RF", src="enb", dst="ue", ok=False, detail=lk,
+                          label=f"La orden no llega al módulo: {lk['why']}")
+            return
+        w = radio.downlink_wait(lk)
+        if w["total_ms"] > 60:   # el módulo duerme: solo oye la orden en su siguiente ocasión de paging (más las repeticiones de su nivel de cobertura)
+            self.bus.emit(dev=self.id, stage="radio_wait", proto="RF", src="enb", dst="ue", ok=None, detail={**w, "ce": lk["ce"], "reps": lk["reps"], "dir": "down"},
+                          label=f"La orden espera {w['total_ms']} ms en el aire: {w['paging_ms']} ms hasta su ocasión de paging (ciclo {w['cycle_ms']} ms) + {w['air_ms']} ms de repeticiones (CE{lk['ce']})")
+            threading.Timer(w["total_ms"] / 1000, self._handle_cmd, (msg.topic, cmd)).start()
+        else:
+            self._handle_cmd(msg.topic, cmd)
+
+    def _handle_cmd(self, topic, cmd):
+        if not (self.mq and self.mq.is_connected()):
+            return
+        self.at(f'+SMSUB: "{topic}","{json.dumps(cmd)}"', "", True)
         self.fw("onMqtt", f"El ESP32 interpreta la orden {json.dumps(cmd)}")
         with self.lock:
             if "mode" in cmd:
@@ -257,9 +285,29 @@ class IrrigationNode:
     def _publish(self):
         if not (self.mq and self.mq.is_connected()):
             return
+        lk = radio.link()
+        if not lk["coverage"]:
+            if not self._lost:
+                self._lost = True
+                self.at("+CEREG: 0,2", "", False)
+                self.bus.emit(dev=self.id, stage="radio_lost", proto="RF", src="ue", dst="enb", ok=False, detail=lk,
+                              label=f"El nodo se quedó sin cobertura y no puede transmitir: {lk['why']}")
+            return
+        self._lost = False
         p = {"soil": round(self.soil), "temp": round(self.temp, 1), "hum": round(self.hum), "tank": round(self.read_tank),
              "dist": self.dist, "pump": int(self.pump), "mode": "auto" if self.cfg["auto"] else "manual", "alarm": int(self.alarm),
-             "led": int(self.alarm), "rssi": -93 + random.randint(-3, 3), "sim": True, "lab": True}
+             "led": int(self.alarm), "rssi": lk["rssi_dbm"], "ce": lk["ce"], "sim": True, "lab": True}
+        w = radio.uplink_wait(lk)
+        if w["total_ms"] > 60:   # el mensaje espera su oportunidad de acceso aleatorio y se repite según el nivel de cobertura
+            self.bus.emit(dev=self.id, stage="radio_wait", proto="RF", src="ue", dst="enb", ok=None, detail={**w, "ce": lk["ce"], "reps": lk["reps"], "dir": "up", "energy_mj": lk["energy_mj"]},
+                          label=f"El mensaje tarda {w['total_ms']} ms en salir: {w['rach_ms']} ms hasta la ocasión de NPRACH + {w['air_ms']} ms de repeticiones (CE{lk['ce']}, ×{lk['reps']}) · ~{lk['energy_mj']} mJ")
+            threading.Timer(w["total_ms"] / 1000, self._send, (p,)).start()
+        else:
+            self._send(p)
+
+    def _send(self, p):
+        if not (self.mq and self.mq.is_connected()):
+            return
         self.fw("publishTelemetry", "El ESP32 publica su telemetría")
         body = json.dumps(p)
         self.at(f'AT+SMPUB="nb/{self.id}/telemetry",{len(body)},1,0', "OK")

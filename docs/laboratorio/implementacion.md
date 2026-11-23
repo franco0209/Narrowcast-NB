@@ -183,3 +183,22 @@ Después: abrir cada bloque (UE, RAN, Núcleo), mover el nivel de humedad en el 
 | Rutas del panel | `app/main.py` (`/api/lab/*`) |
 | Frontend | `app/web/src/lab/`, `app/web/src/tabs/Lab.tsx` |
 | Corrección del S1AP | `docker/oai-nbiot/patch-s1ap.py` |
+
+## Radio NB-IoT de la celda (pestaña RAN)
+
+La vista de la RAN muestra y permite cambiar los parámetros de radio del eNB de OAI del laboratorio. Hay que separar lo real de lo modelado.
+
+**Real (lo carga OAI).** Banda (B3, B7, B8, B20, B28) con sus frecuencias DL/UL y EARFCN, portadora LTE anfitriona (`N_RB_DL`: 6 a 100 PRB), ganancia de TX, periodicidad de NPRACH, repeticiones de NPDCCH del acceso aleatorio y ciclo de paging. El panel guarda la elección en `data/lab-radio.json`. `scripts/oai-lab-start.sh` ejecuta `lab/oai-fakerf/radio_cfg.py`, que la escribe en `/tmp/enb.conf` y deja lo cargado en `data/lab-radio.applied.json`. OAI solo lee su `.conf` al arrancar: **«Aplicar a OAI» reinicia el eNB** (~45 s) y el nodo debe registrarse de nuevo. El panel distingue «guardado» de «aplicado» y lista los cambios pendientes. `inject.c` informa al eNB de la banda real del UE (`OAI_UE_BAND`).
+
+**Modelo (`app/simlab/radio.py`, no medido).** Con radio falsa no hay señal que degradar, así que se calcula: pérdida de propagación (espacio libre a 1 m + exponente 3), RSRP con 20 dBm + ganancia, nivel de cobertura (CE0 ≥ −105, CE1 ≥ −115, CE2 ≥ −128 dBm; 1, 8 y 64 repeticiones), tiempo en el aire (120 ms por repetición) y energía (0,8 W transmitiendo). Consecuencias sobre el nodo simulado:
+
+| Parámetro | Efecto |
+|---|---|
+| Banda que el módulo no soporta (p. ej. B7) | `AT+CBANDCFG` falla, el módulo no encuentra la celda y el registro no se intenta |
+| Distancia (se aplica al instante, sin reiniciar) | Cambia el RSRP y el nivel de cobertura; fuera de −128 dBm el nodo no transmite ni recibe |
+| Nivel de cobertura | Cada mensaje se repite y tarda más en el aire; sube la energía por mensaje |
+| NPRACH | El mensaje de subida espera hasta la siguiente oportunidad de preámbulo |
+| Ciclo de paging | Una orden del celular espera hasta la siguiente ocasión de paging antes de llegar al nodo |
+| `N_RB_DL` | Solo cambia la portadora anfitriona; no altera la velocidad por nodo |
+
+Las bandas NB-IoT del SIM7080G salen de listados de terceros (Waveshare, M5Stack, everythingrf) y faltan de confirmar con la hoja de datos de SIMCom.

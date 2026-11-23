@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pymongo import MongoClient
 
-from . import oai
+from . import oai, radio
 from .bus import Bus
 from .net import UserPlane
 from .node import IrrigationNode
@@ -102,6 +102,14 @@ def startup():
                  label="No se pudo crear la interfaz TUN: el plano de datos real no estará disponible", detail={"error": up.error})
 
 
+class NoCell:
+    """El módulo no encontró una celda utilizable (banda que no soporta o sin cobertura): no llegó a intentar el registro."""
+    state, ip = "DEREGISTERED", None
+
+    def __init__(self, reason):
+        self.reason = reason
+
+
 # ------------------------------------------------------------------ escenarios (cada uno usa un arranque nuevo de OAI)
 def release_node():
     """Deja al nodo sin sesión (antes de un registro nuevo o al dar de baja)."""
@@ -132,6 +140,14 @@ def register(kind):
              label={"legitima": "SIM legítima: IMSI y clave K iguales a las del HSS", "clonada": "SIM clonada: tiene el IMSI correcto pero una clave K distinta a la del HSS",
                     "intruso": "Dispositivo intruso: su IMSI no está dado de alta en el HSS"}[kind])
     node.modem_boot()
+    lk = radio.link()
+    bus.emit(dev=NODE["id"], stage="radio_scan", proto="RF", src="ue", dst="enb", ok=lk["ok"], detail=lk,
+             label=(f"El módulo busca celda en B{lk['band']} ({lk['freq_mhz']} MHz) a {lk['dist_m']:.0f} m: RSRP {lk['rsrp_dbm']} dBm, nivel de cobertura CE{lk['ce']} (×{lk['reps']} repeticiones)"
+                    if lk["ok"] else lk["why"]))
+    if not lk["ok"]:
+        S["ue"] = NoCell(lk["why"])
+        node.modem_registered(None, ok=False, why=lk["why"], searching=True)
+        return
     ue = oai.run(bus, dev, k, opc, up)
     S["ue"] = ue
     if ue.state == "REGISTERED":
@@ -181,9 +197,31 @@ def state():
     return {"seq": bus.seq, "job": running_job["name"],
             "oai": {"running": oai.oai_running(), "age": round(oai.oai_age(), 1), "settle_s": oai.SETTLE_S},
             "userplane": {"ok": up.ok, "error": up.error, **up.stats},
-            "in_hss": hss_has(NODE["imsi"]),
+            "in_hss": hss_has(NODE["imsi"]), "radio": radio.snapshot(),
             "node": {**node.view(), "imsi": NODE["imsi"] if S["sim"] != "intruso" else INTRUSO_IMSI, "sim": S["sim"],
                      "state": ue.state if ue else "DEREGISTERED", "reason": ue.reason if ue else "", "ip": ue.ip if ue and ue.state == "REGISTERED" else None}}
+
+
+@app.post("/radio/config")
+def api_radio_config(band: int = None, n_rb_dl: int = None, tx_gain: float = None, nprach_period: int = None, npdcch_rep: int = None,
+                     paging: int = None, distance_m: float = None):
+    """Guarda la radio deseada. La distancia se aplica al instante; el resto queda pendiente hasta «aplicar» (OAI solo lee su .conf al arrancar)."""
+    ch = {k: v for k, v in dict(band=band, n_rb_dl=n_rb_dl, tx_gain=tx_gain, nprach_period=nprach_period, npdcch_rep=npdcch_rep, paging=paging, distance_m=distance_m).items() if v is not None}
+    radio.save(ch)
+    if set(ch) == {"distance_m"}:
+        lk = radio.link()
+        bus.emit(dev=NODE["id"], stage="radio_link", proto="RF", src="ue", dst="enb", ok=lk["ok"], detail=lk,
+                 label=f"El nodo está a {lk['dist_m']:.0f} m del eNB: RSRP {lk['rsrp_dbm']} dBm" + (f", cobertura CE{lk['ce']} (×{lk['reps']})" if lk["coverage"] else ", SIN cobertura"))
+    return radio.snapshot()
+
+
+@app.post("/radio/apply")
+def api_radio_apply():
+    """El panel reinicia OAI para que cargue la radio guardada; aquí el nodo pierde su sesión (el túnel muere con el eNB)."""
+    release_node()
+    bus.emit(dev=NODE["id"], stage="scenario_note", proto="RF", src="ue", dst="enb", ok=None, detail={"pendiente": radio.pending()},
+             label="Se reinicia el eNB de OAI con la radio nueva: el nodo pierde su sesión y debe registrarse otra vez")
+    return radio.snapshot()
 
 
 @app.post("/provision")

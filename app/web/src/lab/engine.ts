@@ -9,7 +9,19 @@ export interface NodeSnap {
   at: { t: number; cmd: string; resp: string; ok: boolean }[];
   fw: { t: number; fn: string; text: string }[];
 }
-export interface LabState { job: string | null; oai: { running: boolean; age: number; settle_s: number }; userplane: { ok: boolean; tx: number; rx: number; error: string }; in_hss: boolean; node: NodeSnap }
+export interface RadioCfg { band: number; n_rb_dl: number; tx_gain: number; nprach_period: number; npdcch_rep: number; paging: number; distance_m: number }
+export interface RadioLink {
+  band: number; dist_m: number; freq_mhz: number; path_loss_db: number; ptx_dbm: number; rsrp_dbm: number; rssi_dbm: number; csq: number; ce: number | null; reps: number;
+  air_ms: number; energy_mj: number; module_supports: boolean; coverage: boolean; ok: boolean; why: string;
+}
+export interface RadioSnap {
+  saved: RadioCfg; applied: RadioCfg; pending: { key: string; before: number; after: number }[];
+  cell: { dl_mhz: number; ul_mhz: number; earfcn: number; dl_range: string; host_mhz: number }; cell_saved: { dl_mhz: number; ul_mhz: number; earfcn: number; dl_range: string; host_mhz: number };
+  link: RadioLink; last: { up_ms: number | null; down_ms: number | null; up_air_ms: number | null };
+  choices: { band: number[]; n_rb_dl: number[]; nprach_period: number[]; npdcch_rep: number[]; paging: number[] };
+  bands: Record<string, { module: boolean; dl: string }>; host_mhz: Record<string, number>; ce_limits: [number, number, number][];
+}
+export interface LabState { job: string | null; oai: { running: boolean; age: number; settle_s: number }; userplane: { ok: boolean; tx: number; rx: number; error: string }; in_hss: boolean; node: NodeSnap; radio: RadioSnap }
 export interface LabSnap {
   rows: any[]; caption: any | null; speed: number; paused: boolean; sel: number | null; st: LabState | null; link: boolean; playing: boolean;
   pending: { name: string; since: number } | null;   // acción pulsada que aún no consta como operación en curso

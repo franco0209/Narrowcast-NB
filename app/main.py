@@ -485,8 +485,8 @@ def logs(name: str, tail: int = 80):
 
 # ------------------------------------------------------ Laboratorio (simlab)
 LAB_URL = os.environ.get("LAB_URL", "http://simlab:8090")
-LAB_OK = re.compile(r"^(state|events|reset|provision|scenario/(registrar|clon|intruso|baja)|node/(env|ping|firmware)|oai/log)$")
-OAI_SCENARIOS = {"scenario/registrar", "scenario/clon", "scenario/intruso"}     # cada uno necesita un arranque nuevo de OAI
+LAB_OK = re.compile(r"^(state|events|reset|provision|scenario/(registrar|clon|intruso|baja)|node/(env|ping|firmware)|oai/log|radio/(config|apply))$")
+OAI_SCENARIOS = {"scenario/registrar", "scenario/clon", "scenario/intruso", "radio/apply"}     # cada uno necesita un arranque nuevo de OAI
 
 
 def lab_bridge():
@@ -588,7 +588,7 @@ def lab_proxy(path: str, request: Request):
     """El navegador solo habla con el panel; el panel reenvía al simulador (rutas permitidas)."""
     if not LAB_OK.match(path):
         raise HTTPException(404, "ruta del laboratorio no permitida")
-    if path.startswith("scenario/"):      # una sola operación a la vez: se comprueba ANTES de tocar OAI (un doble clic no debe reiniciarlo dos veces)
+    if path.startswith(("scenario/", "radio/apply")):      # una sola operación a la vez: se comprueba ANTES de tocar OAI (un doble clic no debe reiniciarlo dos veces)
         try:
             with urllib.request.urlopen(LAB_URL + "/state", timeout=5) as r:
                 job = json.loads(r.read()).get("job")

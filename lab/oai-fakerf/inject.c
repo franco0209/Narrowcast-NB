@@ -42,7 +42,7 @@ static int inj_encode(int kind, const uint8_t *nas, int nl, uint8_t *out) {
     UE_Capability_NB_r13_t *c = &s->criticalExtensions.choice.ueCapabilityInformation_r13.ue_Capability_Container_r13;
     c->accessStratumRelease_r13 = 0;
     struct SupportedBand_NB_r13 *b = calloc(1, sizeof *b);
-    b->band_r13 = 3;
+    b->band_r13 = getenv("OAI_UE_BAND") ? atoi(getenv("OAI_UE_BAND")) : 3;   /* la banda de la celda: la fija el panel */
     ASN_SEQUENCE_ADD(&c->rf_Parameters_r13.supportedBandList_r13.list, b);
   } else if (kind == 2) {
     m.message.choice.c1.present = UL_DCCH_MessageType_NB__c1_PR_rrcConnectionReconfigurationComplete_r13;

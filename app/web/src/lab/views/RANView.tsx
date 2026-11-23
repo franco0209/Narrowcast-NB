@@ -6,6 +6,7 @@ import { labEngine, LabSnap, NodeSnap } from "../engine";
 import { useScene } from "../flow";
 import { Tower } from "../art";
 import { Frame } from "./Frame";
+import RadioCard from "./RadioCard";
 import type { Part } from "./Overview";
 
 const NODES = [
@@ -80,6 +81,7 @@ export default function RANView({ node, snap, onBack, onOpen }: { node: NodeSnap
           <div className="legend"><span><i className="lg ctrl" />señalización</span><span><i className="lg user" />datos de usuario</span><span><i className="lg radio" />radio (simulada)</span></div>
         </div>
         <div className="ran-side">
+          {st?.radio && <RadioCard radio={st.radio} running={!!st.oai.running} busy={!!st.job || !!snap.pending} />}
           <div className="card">
             <div className="card-h"><h2>¿Qué hace OAI ahora?</h2></div>
             <p className="ran-expl">{expl}</p>
@@ -88,6 +90,7 @@ export default function RANView({ node, snap, onBack, onOpen }: { node: NodeSnap
             <table className="kv"><tbody>
               <tr><th>Paquetes de subida</th><td>{st?.userplane.tx ?? 0} (módulo → GTP-U → SGW-U)</td></tr>
               <tr><th>Paquetes de bajada</th><td>{st?.userplane.rx ?? 0} (SGW-U → GTP-U → módulo)</td></tr>
+              <tr><th>Banda de la celda</th><td>{st?.radio ? `B${st.radio.applied.band} · DL ${st.radio.cell.dl_mhz} MHz · UL ${st.radio.cell.ul_mhz} MHz` : "—"}</td></tr>
               <tr><th>Tramo Uu de datos</th><td>relevo UDP de pruebas (no hay radio)</td></tr>
             </tbody></table>
           </div>

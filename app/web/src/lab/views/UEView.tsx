@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlarmLed, ArtDefs, Dht22, Esp32Board, Hand, Hcsr04, PottedPlant, PumpAssembly, Sim7080, SoilProbe, WaterTank } from "../art";
 import { api } from "../../lib";
 import { fail } from "../../store";
-import { NodeSnap } from "../engine";
+import { NodeSnap, RadioSnap } from "../engine";
+import { ceName } from "./RadioCard";
 import { Frame } from "./Frame";
 import type { Part } from "./Overview";
 import { runScenario } from "../actions";
@@ -119,7 +120,7 @@ function Hardware({ node }: { node: NodeSnap }) {
 
 // ---------------------------------------------------------------- módulo NB-IoT, SIM y consola AT
 const SIMS: [string, string, string][] = [["registrar", "legitima", "SIM legítima"], ["clon", "clonada", "SIM clonada"], ["intruso", "intruso", "Intruso (IMSI sin alta)"]];
-function Module({ node, busy }: { node: NodeSnap; busy: boolean }) {
+function Module({ node, busy, radio }: { node: NodeSnap; busy: boolean; radio?: RadioSnap }) {
   const con = useRef<HTMLDivElement>(null);
   useEffect(() => { if (con.current) con.current.scrollTop = con.current.scrollHeight; }, [node.at.length]);
   const ST: Record<string, string> = { DEREGISTERED: "sin conexión", ATTACHING: "registrándose…", AUTH: "autenticando…", SECURITY: "seguridad NAS…", REGISTERED: "registrado", REJECTED: "RECHAZADO" };
@@ -131,6 +132,7 @@ function Module({ node, busy }: { node: NodeSnap; busy: boolean }) {
         <table className="kv"><tbody>
           <tr><th>IMSI</th><td>{node.imsi}</td></tr><tr><th>IP (APN internet)</th><td>{node.ip || "—"}</td></tr>
           <tr><th>MQTT</th><td>{node.mqtt ? "conectado al broker" : "sin sesión"}</td></tr>
+          {radio && <tr><th>Señal (RSRP)</th><td className={radio.link.coverage ? "" : "bad-t"}>{radio.link.rsrp_dbm} dBm · {ceName(radio.link.ce)} · a {radio.link.dist_m >= 1000 ? (radio.link.dist_m / 1000).toFixed(1) + " km" : radio.link.dist_m + " m"} en B{radio.link.band}</td></tr>}
           {node.reason && <tr><th>Motivo</th><td className="bad-t">{node.reason}</td></tr>}
         </tbody></table>
         <label className="lbl">SIM insertada (cada prueba reinicia OAI y tarda ~45 s)</label>
@@ -157,11 +159,11 @@ function Module({ node, busy }: { node: NodeSnap; busy: boolean }) {
   );
 }
 
-export default function UEView({ node, busy, onBack, onOpen }: { node: NodeSnap; busy: boolean; onBack: () => void; onOpen: (p: Part) => void }) {
+export default function UEView({ node, busy, radio, onBack, onOpen }: { node: NodeSnap; busy: boolean; radio?: RadioSnap; onBack: () => void; onOpen: (p: Part) => void }) {
   return (
     <Frame title="UE · nodo de riego inteligente" sub="ESP32 + módulo NB-IoT SIM7080G con sensores y bomba" onBack={onBack} onOpen={onOpen}
       right={[{ label: "Uu", sub: "radio NB-IoT", kind: "radio", to: "ran" }]}>
-      <div className="ue-grid"><div className="ue-main"><Hardware node={node} /><Firmware node={node} /></div><Module node={node} busy={busy} /></div>
+      <div className="ue-grid"><div className="ue-main"><Hardware node={node} /><Firmware node={node} /></div><Module node={node} busy={busy} radio={radio} /></div>
     </Frame>
   );
 }

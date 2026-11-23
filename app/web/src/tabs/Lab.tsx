@@ -192,7 +192,7 @@ export default function Lab() {
               </motion.div>
             ) : (
               <motion.div key={part} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                {part === "ue" && <UEView node={node} busy={busy} onBack={() => open(null)} onOpen={open} />}
+                {part === "ue" && <UEView node={node} busy={busy} radio={s?.radio} onBack={() => open(null)} onOpen={open} />}
                 {part === "ran" && <RANView node={node} snap={snap} onBack={() => open(null)} onOpen={open} />}
                 {part === "core" && <CoreView node={node} snap={snap} onBack={() => open(null)} onOpen={open} />}
               </motion.div>
