@@ -1,6 +1,6 @@
 # Docker, imágenes y compilación
 
-Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente, con qué herramientas y versiones, cómo se orquesta con Docker Compose y qué variables controlan el comportamiento. Para la arquitectura, ver [`arquitectura.md`](arquitectura.md).
+Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente, con qué herramientas y versiones, cómo se orquesta con Docker Compose y qué variables controlan el comportamiento. Para la arquitectura, ver [`arquitectura.md`](../arquitectura/arquitectura.md).
 
 ## 1. Lenguajes y herramientas de construcción
 
@@ -10,11 +10,16 @@ Cómo se construye y se ejecuta el proyecto: qué imagen compila cada componente
 | Open5GS WebUI | JavaScript (Next.js, Node 20) | `npm ci && npm run build` | `docker/webui/Dockerfile` |
 | OAI eNB (NB-IoT) | C (y C++ en UHD) | script propio `build_oai` (CMake) | `docker/oai-nbiot/Dockerfile` |
 | srsRAN 4G (radio virtual) | C++ | CMake | `docker/srsran4g/Dockerfile` |
-| Panel | Python 3.12 + JavaScript | `pip install` (sin compilación de frontend) | `app/Dockerfile` |
+| Panel | Python 3.12 (backend) + TypeScript/React (frontend) | `pip install` y `npm run build` (Vite) en dos etapas | `app/Dockerfile` |
 | Mosquitto, MongoDB | — | imágenes oficiales sin modificar | — |
 | Firmware ESP32 | C++ (Arduino) | Arduino IDE o PlatformIO | fuera de Docker |
 | Scripts | Bash | — | `scripts/` |
 | Alta de suscriptor de prueba | JavaScript (`mongosh`) | — | `provisioning/` |
+| Códecs S1AP, NGAP y RRC | C generado con `asn1c` a partir de ASN.1 (`lib/asn1c`, `lib/s1ap`) | se compila con el resto de Open5GS | `docker/open5gs/Dockerfile` |
+| freeDiameter (S6a, Gx) | C, biblioteca externa con hilos propios | se enlaza en las funciones de Open5GS | `docker/open5gs/Dockerfile` |
+| UHD (controlador del USRP, Ettus) | C++ | se enlaza dentro de `lte-softmodem` | `docker/oai-nbiot/Dockerfile` |
+
+Archivos de configuración por componente: YAML en Open5GS (se leen con `libyaml`), `.conf` en freeDiameter y en OAI (libconfig), variables de entorno y YAML del plan RF en el panel, `secrets.h` en el firmware y `.env` en Compose. En C no hay clases: Open5GS y OAI las simulan con `struct`, punteros a función y convenciones de nombre (detalle en [`codigo-por-dentro.md`](../arquitectura/codigo-por-dentro.md) §1).
 
 ## 2. Imágenes
 
@@ -52,13 +57,16 @@ En tiempo de ejecución, el eNB no usa el `entrypoint` de la imagen para configu
 
 `release_23_11` (commit `eea87b1`), `cmake -DENABLE_ZEROMQ=ON -DENABLE_UHD=OFF -DENABLE_GUI=OFF`. Instala `srsenb` y `srsue`. Solo se usa en el perfil `sim`.
 
-### 2.4 Panel
+### 2.4 Panel y laboratorio (simlab)
 
-Capa de dependencias primero (`COPY requirements.txt` + `pip install`), luego el código: reconstruir tras un cambio de código tarda segundos. `requirements.txt` fija las versiones exactas.
+El `Dockerfile` es de **dos etapas**: la etapa `web` (`node:22-alpine`) compila el front React (`npm ci && npm run build`) y la etapa final (`python:3.12-slim`) copia solo el resultado a `/app/static`; la imagen no lleva Node. En la etapa Python, capa de dependencias primero (`COPY requirements.txt` + `pip install`), luego el código. `requirements.txt` fija las versiones exactas.
+
+El servicio `simlab` **reutiliza esta misma imagen** (`narrowcast-nb/app:local`) con otro comando (`uvicorn simlab.server:app`), así que no ocupa una imagen más. La imagen añade `iproute2` y `cryptography` (Milenage y EIA2); ya no lleva `pycrate`, porque el eNB del laboratorio es el de OAI y no hay S1AP propio. `simlab` lleva `NET_ADMIN`, `/dev/net/tun` y `rp_filter=0` para crear la interfaz TUN del módulo; el panel no.
 
 ## 3. Docker Compose
 
-`compose.yaml` define 15 servicios en una sola red. Una plantilla YAML compartida (`x-open5gs`) evita repetir imagen, `build` y política de reinicio en los siete servicios de Open5GS.
+`compose.yaml` define 16 servicios en una sola red. Una plantilla YAML compartida (`x-open5gs`) evita repetir imagen, `build` y política de reinicio en los siete servicios de Open5GS.
+
 
 ### 3.1 Perfiles
 

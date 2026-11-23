@@ -7,6 +7,8 @@ import re
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,8 +18,8 @@ import docker
 import markdown
 import paho.mqtt.client as mqtt
 import yaml
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -56,6 +58,8 @@ async def startup():
     except Exception:
         pass
     start_mqtt()
+    threading.Thread(target=lab_bridge, name="lab-bridge", daemon=True).start()
+    threading.Thread(target=oai_watchdog, name="oai-watchdog", daemon=True).start()
 
 
 def broadcast(event: dict):
@@ -289,6 +293,10 @@ def devices_get():
 class Cmd(BaseModel):
     led: Optional[bool] = None
     interval_s: Optional[int] = None
+    pump: Optional[bool] = None            # nodo de riego: bomba (solo en modo manual)
+    mode: Optional[str] = None             # «auto» o «manual»
+    soil_low: Optional[int] = None         # % de humedad de suelo que enciende la bomba
+    soil_high: Optional[int] = None        # % que la apaga
 
 
 @app.post("/api/devices/{did}/cmd")
@@ -298,8 +306,13 @@ def device_cmd(did: str, cmd: Cmd):
     payload = {k: v for k, v in cmd.model_dump().items() if v is not None}
     if not payload:
         raise HTTPException(400, "comando vacío")
-    if "interval_s" in payload and not 5 <= payload["interval_s"] <= 86400:
-        raise HTTPException(400, "interval_s debe estar entre 5 y 86400")
+    if "mode" in payload and payload["mode"] not in ("auto", "manual"):
+        raise HTTPException(400, "mode debe ser auto o manual")
+    for k in ("soil_low", "soil_high"):
+        if k in payload and not 0 <= payload[k] <= 100:
+            raise HTTPException(400, f"{k} debe estar entre 0 y 100")
+    if "interval_s" in payload and not 3 <= payload["interval_s"] <= 86400:
+        raise HTTPException(400, "interval_s debe estar entre 3 y 86400")
     info = mqttc.publish(f"nb/{did}/cmd", json.dumps(payload), qos=1)
     broadcast({"type": "cmd", "device": did, "cmd": payload, "ts": time.time()})
     return {"sent": payload, "mid": info.mid}
@@ -467,6 +480,142 @@ def logs(name: str, tail: int = 80):
     except Exception as e:
         raise HTTPException(500, f"docker: {e}")
     return {"name": name, "status": c.status, "lines": ANSI.sub("", raw).splitlines()}
+
+
+
+# ------------------------------------------------------ Laboratorio (simlab)
+LAB_URL = os.environ.get("LAB_URL", "http://simlab:8090")
+LAB_OK = re.compile(r"^(state|events|reset|provision|scenario/(registrar|clon|intruso|baja)|node/(env|ping|firmware)|oai/log)$")
+OAI_SCENARIOS = {"scenario/registrar", "scenario/clon", "scenario/intruso"}     # cada uno necesita un arranque nuevo de OAI
+
+
+def lab_bridge():
+    """Reenvía al navegador (SSE) los eventos del simulador. Reintenta si el simulador no está."""
+    while True:
+        try:
+            with urllib.request.urlopen(LAB_URL + "/stream", timeout=40) as r:
+                broadcast({"type": "lab_link", "up": True})
+                for line in r:
+                    if line.startswith(b"data: "):
+                        broadcast({"type": "lab", "ev": json.loads(line[6:])})
+        except Exception:
+            pass
+        try:
+            broadcast({"type": "lab_link", "up": False})
+        except Exception:
+            pass
+        time.sleep(3)
+
+
+OAI_LAB_CONTAINER = "nb-oai-lab"
+
+
+def oai_watchdog():
+    """Si OAI se cae solo (SIGSEGV, código 139) mientras el simulador ejecuta un escenario, lo vuelve a arrancar."""
+    while True:
+        time.sleep(4)
+        try:
+            c = docker.from_env().containers.get(OAI_LAB_CONTAINER)
+            if c.status == "exited" and c.attrs["State"].get("ExitCode") not in (0, 137, 143):
+                with urllib.request.urlopen(LAB_URL + "/state", timeout=4) as r:
+                    if json.loads(r.read()).get("job"):
+                        c.start()
+        except Exception:
+            pass
+
+
+@app.post("/api/oai-lab/{action}")
+def oai_lab(action: str):
+    """Enciende o apaga el eNB de OAI con radio falsa del Laboratorio (no emite RF; no es el eNB real del perfil «radio»)."""
+    if action not in ("start", "stop"):
+        raise HTTPException(404, "acción desconocida")
+    try:
+        c = docker.from_env().containers.get(OAI_LAB_CONTAINER)
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"El contenedor {OAI_LAB_CONTAINER} no existe: docker compose --profile oailab create oai-lab")
+    except Exception as e:
+        raise HTTPException(500, f"docker: {e}")
+    if action == "stop":
+        c.stop(timeout=10)
+    elif c.status == "running":
+        c.restart(timeout=10)       # reinicio: OAI solo conecta un UE simulado por arranque
+    else:
+        c.start()
+    return {"ok": True, "action": action}
+
+
+@app.get("/api/lab/upstats")
+def lab_upstats():
+    """Contadores del plano de usuario en el núcleo: interfaz ogstun del PGW-U (UPF). Subida = lo que escribe el UE en el túnel (rx de la interfaz)."""
+    try:
+        c = docker.from_env().containers.get("nb-pgwu")
+        r = c.exec_run(["sh", "-c", "cd /sys/class/net/ogstun/statistics && cat rx_packets rx_bytes tx_packets tx_bytes"])
+        v = [int(x) for x in r.output.decode().split()]
+        return {"t": time.time(), "up_pkts": v[0], "up_bytes": v[1], "down_pkts": v[2], "down_bytes": v[3]}
+    except Exception as e:
+        raise HTTPException(500, f"docker: {e}")
+
+
+@app.get("/api/lab/corelog")
+def lab_corelog(since: float, until: float = 0, imsi: str = ""):
+    """Lo que registró el núcleo (MME, HSS, SGW-C, PGW-C, PCRF) en una ventana de tiempo, para contrastarlo con el simulador."""
+    if imsi and not re.fullmatch(r"\d{5,15}", imsi):
+        raise HTTPException(400, "IMSI inválido")
+    out = []
+    try:
+        cl = docker.from_env()
+        for name, short in (("nb-mme", "MME"), ("nb-hss", "HSS"), ("nb-sgwc", "SGW-C"), ("nb-pgwc", "PGW-C"), ("nb-pcrf", "PCRF")):
+            try:
+                c = cl.containers.get(name)
+                raw = c.logs(since=int(since) - 1, until=int(until) + 2 if until else None, timestamps=True).decode("utf-8", "replace")
+            except Exception:
+                continue
+            for ln in ANSI.sub("", raw).splitlines():
+                ts, _, txt = ln.partition(" ")
+                if "epoll" in txt or not txt.strip():
+                    continue
+                if imsi and imsi not in txt:
+                    continue
+                out.append({"ts": ts, "c": short, "text": txt.strip()[:260]})
+    except Exception as e:
+        raise HTTPException(500, f"docker: {e}")
+    out.sort(key=lambda x: x["ts"])
+    return {"lines": out[-250:]}
+
+
+@app.api_route("/api/lab/{path:path}", methods=["GET", "POST", "DELETE"])
+def lab_proxy(path: str, request: Request):
+    """El navegador solo habla con el panel; el panel reenvía al simulador (rutas permitidas)."""
+    if not LAB_OK.match(path):
+        raise HTTPException(404, "ruta del laboratorio no permitida")
+    if path.startswith("scenario/"):      # una sola operación a la vez: se comprueba ANTES de tocar OAI (un doble clic no debe reiniciarlo dos veces)
+        try:
+            with urllib.request.urlopen(LAB_URL + "/state", timeout=5) as r:
+                job = json.loads(r.read()).get("job")
+            if job:
+                raise HTTPException(409, f"Ya hay una operación en curso: {job}. Espera a que termine.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    if path in OAI_SCENARIOS:
+        oai_lab("start")          # OAI solo conecta un UE por arranque: se reinicia antes de cada registro
+    url = f"{LAB_URL}/{path}" + (f"?{request.url.query}" if request.url.query else "")
+    req = urllib.request.Request(url, method=request.method, data=b"" if request.method != "GET" else None)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read() or b"{}"
+            if path == "node/firmware":
+                return PlainTextResponse(raw.decode())
+            return json.loads(raw)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read()).get("detail", e.reason)
+        except Exception:
+            detail = e.reason
+        raise HTTPException(e.code, detail)
+    except Exception:
+        raise HTTPException(503, "El simulador (nb-simlab) no responde. ¿Está levantado? docker compose up -d simlab")
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")

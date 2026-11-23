@@ -44,9 +44,10 @@ Parámetros de la red: PLMN `001/01`, TAC `1`, APN `internet`, subred de UE `10.
 | Radio virtual | `config/srsran/`, `docker/srsran4g/`, `scripts/sim.sh`, `scripts/validate.sh` | eNB y UE simulados (srsRAN 4G) para validar el núcleo sin emitir RF. |
 | Reglas de RF | `rf-plan.example.yaml`, `scripts/rf-check.sh`, `scripts/rf-run.sh` | Validación del plan, corte automático por duración y registro de sesiones. |
 | Broker MQTT | `mosquitto/` | Mensajería entre el dispositivo y el panel. |
-| Panel de control | `app/` | Pestañas Resumen, Suscriptores, Núcleo, eNB, Radio, Dispositivo y Ayuda; simulador de dispositivo (`fake_device.py`). |
+| Panel de control | `app/` | Pestañas Resumen, Suscriptores, Núcleo, eNB, Radio, Dispositivo, Laboratorio y Ayuda; simulador de dispositivo (`fake_device.py`). |
+| Laboratorio de simulación | `app/simlab/`, `app/web/src/lab/`, `lab/oai-fakerf/` | Nodo de riego NB-IoT (ESP32 + SIM7080G + sensores) que se registra en Open5GS **a través del eNB real de OAI** (radio falsa) y manda MQTT real por el túnel GTP-U; vistas de detalle del UE, la RAN y el núcleo |
 | Firmware | `firmware/esp32-nbiot/` | Código del ESP32 (Arduino/PlatformIO): módem por AT, sensor DHT22, LED y MQTT. |
-| Documentación | `docs/` | Arquitectura, panel, Docker y compilación, etapas, plan del proyecto, guías del panel y presentación de avance. |
+| Documentación | `docs/` | Proyecto, conceptos, arquitectura, operación, laboratorio y referencia (índice en `docs/README.md`), más las guías del panel. |
 
 ### Panel de control
 
@@ -58,6 +59,7 @@ Interfaz en <http://127.0.0.1:8080> que sigue el tema claro/oscuro del sistema.
 - **eNB (OAI):** pila de protocolos del eNB (S1AP/GTP-U, RRC, PDCP, RLC, MAC, PHY NB-IoT, UHD/USRP) con recorridos de bajada y subida, la secuencia de arranque, los parámetros tomados del plan RF y el registro en vivo.
 - **Radio:** plan RF con valores seguros y botón de transmisión que exige plan válido, dos confirmaciones humanas (portadora libre y autorizado por) y mantenerlo pulsado; corta solo al cumplirse la duración.
 - **Dispositivo:** telemetría en vivo, gráfico, control del LED e intervalo de envío.
+- **Laboratorio:** dispositivos IoT virtuales (foco, sensor de clima, medidor de tanque e intruso) que se registran en el núcleo real; escena animada, traza del flujo con lo que registró el núcleo y escenarios de fallo (intruso, SIM clonada, resincronización de SQN, eNB ajeno, reposo PSM). La radio es simulada.
 - **Ayuda:** guías por fase (`docs/guide/*.md`).
 
 Una barra superior fija muestra siempre el estado del núcleo, del dispositivo y de la RF.
@@ -66,18 +68,29 @@ El panel monta el socket de Docker para encender el eNB, lo que equivale a acces
 
 ## Documentación
 
-| Documento | Contenido |
-|---|---|
-| [`docs/arquitectura.md`](docs/arquitectura.md) | Capas, red y direccionamiento, partes de Open5GS y OpenAirInterface que se usan, interfaces y protocolos, suscriptores, MQTT, firmware y seguridad de RF |
-| [`docs/panel.md`](docs/panel.md) | Diseño técnico del panel: API REST, eventos SSE, motor de diagramas, seguridad y cómo extenderlo |
-| [`docs/docker-y-compilacion.md`](docs/docker-y-compilacion.md) | Lenguajes, imágenes, compilación de Open5GS/OAI/srsRAN, perfiles de Compose, variables y comandos |
-| [`docs/etapas.md`](docs/etapas.md) | Fases del proyecto, estado, lo que falta, guía de puesta en marcha y problemas frecuentes |
-| [`docs/PLAN Narrowcast-NB.md`](docs/PLAN%20Narrowcast-NB.md) | Plan original del proyecto |
-| [`docs/Narrowcast-NB-avance.pptx`](docs/Narrowcast-NB-avance.pptx) | Presentación de avance |
+Todo está en [`docs/`](docs/README.md), organizado por tema (el índice completo con «qué leer según lo que busques» está en [`docs/README.md`](docs/README.md)):
+
+| Tema | Documento | Contenido |
+|---|---|---|
+| Proyecto | [`docs/proyecto/plan.md`](docs/proyecto/plan.md) | Plan original del proyecto |
+| Proyecto | [`docs/proyecto/estado-por-fases.md`](docs/proyecto/estado-por-fases.md) | Estado de cada fase, lo que falta y el detalle técnico de las fases |
+| Operación | [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md) | Puesta en marcha paso a paso y problemas frecuentes |
+| Conceptos | [`docs/conceptos/fundamentos.md`](docs/conceptos/fundamentos.md) | NB-IoT, EPC, qué son Open5GS y OAI, qué es propio, flujos de punta a punta, glosario y ejercicios |
+| Arquitectura | [`docs/arquitectura/arquitectura.md`](docs/arquitectura/arquitectura.md) | Capas, red y direccionamiento, partes de Open5GS y OAI que se usan, interfaces y protocolos, suscriptores, MQTT, firmware y seguridad de RF |
+| Arquitectura | [`docs/arquitectura/integracion-oai-open5gs.md`](docs/arquitectura/integracion-oai-open5gs.md) | Cómo se relaciona el proyecto con OAI y Open5GS a nivel de código (funciones, archivos, flujos) |
+| Arquitectura | [`docs/arquitectura/codigo-por-dentro.md`](docs/arquitectura/codigo-por-dentro.md) | Lenguajes, procesos e hilos, sincronización, comunicación e interfaces, incluido el código del Laboratorio |
+| Arquitectura | [`docs/arquitectura/modificaciones-oai-open5gs.md`](docs/arquitectura/modificaciones-oai-open5gs.md) | **Qué se modificó de Open5GS y OAI** (y qué no), con la comparación contra los originales y cómo verificarla |
+| Operación | [`docs/operacion/docker-y-compilacion.md`](docs/operacion/docker-y-compilacion.md) | Lenguajes, imágenes, compilación de Open5GS/OAI/srsRAN, perfiles de Compose, volúmenes y comandos |
+| Operación | [`docs/operacion/panel.md`](docs/operacion/panel.md) | Diseño técnico del panel: API REST, eventos SSE, motor de diagramas, seguridad y Laboratorio |
+| Laboratorio | [`docs/laboratorio/implementacion.md`](docs/laboratorio/implementacion.md) | **Cómo se implementó el Laboratorio**: arquitectura, decisiones, problemas resueltos, verificación y limitaciones |
+| Laboratorio | [`docs/laboratorio/pruebas-oai.md`](docs/laboratorio/pruebas-oai.md) | Pruebas de OAI sin USRP (radio falsa + inyector): qué funciona, hallazgos y lo que falta |
+| Referencia | [`docs/referencia/verificacion.md`](docs/referencia/verificacion.md) | Estado de verificación: qué está comprobado y qué no |
+| Referencia | [`docs/referencia/preguntas-recurrentes.md`](docs/referencia/preguntas-recurrentes.md) | Preguntas recurrentes con respuesta breve y enlaces al detalle |
+| Panel | [`docs/guide/`](docs/guide/04-laboratorio.md) | Guías que muestra la pestaña Ayuda del panel (radio, módulo, datos, laboratorio) |
 
 ## Estado
 
-El software está listo hasta donde se puede sin hardware: núcleo, panel, broker y eNB configurado funcionan (S1 Setup verificado). Falta la prueba con USRP, SIM y módulo reales, que dependen de autorización y de equipos externos. El detalle por fase, lo que falta y la guía de puesta en marcha están en [`docs/etapas.md`](docs/etapas.md).
+El software está listo hasta donde se puede sin hardware: núcleo, panel, broker y eNB configurado funcionan (S1 Setup verificado). Falta la prueba con USRP, SIM y módulo reales, que dependen de autorización y de equipos externos. El detalle por fase, lo que falta y la guía de puesta en marcha están en [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md).
 
 ## Inicio rápido
 
@@ -90,7 +103,7 @@ cp .env.example .env          # cambiar al menos MQTT_PASS
 docker compose up -d          # núcleo + broker + panel (no emite radio)
 ```
 
-Panel: <http://127.0.0.1:8080>. Para el recorrido completo (radio virtual, eNB NB-IoT, transmisión real, firmware) y los problemas frecuentes, ver [`docs/etapas.md`](docs/etapas.md).
+Panel: <http://127.0.0.1:8080>. Para el recorrido completo (radio virtual, eNB NB-IoT, transmisión real, firmware) y los problemas frecuentes, ver [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md).
 
 ## Reanudación
 
@@ -106,7 +119,7 @@ docker compose ps                             # todos "running" (subscriber-prov
 - **Datos conservados:** los suscriptores y el plan RF (`data/rf-plan.yaml`) se mantienen entre reinicios; no hay que volver a cargarlos.
 - **Actualizar el código:** `git pull` y, si cambió algo en `app/`, `docker/` o `compose.yaml`, `docker compose up -d --build`.
 - **Probar sin hardware:** `docker compose exec app python fake_device.py esp32-sim`.
-- **eNB NB-IoT:** si el contenedor `nb-enb-nbiot` no existe (por ejemplo tras `docker compose down`), recrearlo con `docker compose --profile radio create enb-nbiot`. Emitir por radio sigue exigiendo plan RF completo y autorización (ver [`docs/etapas.md`](docs/etapas.md)).
+- **eNB NB-IoT:** si el contenedor `nb-enb-nbiot` no existe (por ejemplo tras `docker compose down`), recrearlo con `docker compose --profile radio create enb-nbiot`. Emitir por radio sigue exigiendo plan RF completo y autorización (ver [`docs/operacion/puesta-en-marcha.md`](docs/operacion/puesta-en-marcha.md)).
 - **Ver registros:** `docker logs -f nb-mme` (o cualquier contenedor `nb-*`), o la pestaña **Núcleo** del panel.
 - **Detener:** `docker compose --profile sim --profile radio down` (conserva los datos); `docker compose down -v` además borra los suscriptores.
 
@@ -118,13 +131,13 @@ compose.yaml            servicios (perfil `sim` = radio virtual, `radio` = eNB N
 rf-plan.example.yaml    plantilla del plan RF (se guarda en data/rf-plan.yaml)
 config/                 configuración de Open5GS, srsRAN y OAI
 provisioning/           alta del suscriptor en MongoDB
-app/                    panel web (FastAPI + HTML/JS) y simulador de dispositivo
+app/                    panel web (FastAPI + React/TypeScript en `app/web/`), simulador de dispositivo y `simlab/` (laboratorio)
 mosquitto/              configuración del broker MQTT
 firmware/               código del ESP32
 data/                   plan RF y registro de sesiones (no se versiona)
 docker/                 Dockerfiles (open5gs, srsran4g, webui, oai-nbiot)
 scripts/                sim.sh, validate.sh, rf-check.sh, rf-run.sh, oai-enb-start.sh
-docs/                   plan, etapas, guías del panel y presentación de avance
+docs/                   proyecto/, conceptos/, arquitectura/, operacion/, laboratorio/, referencia/ y guide/ (guías del panel)
 ```
 
 `.env`, `data/`, `firmware/**/secrets.h` y los `.pcap` no se versionan.

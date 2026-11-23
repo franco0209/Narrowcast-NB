@@ -1,6 +1,6 @@
 # Cómo se relaciona Narrowcast-NB con OpenAirInterface y Open5GS (nivel de código)
 
-Este documento explica **qué hace Narrowcast-NB, qué hacen por dentro OAI y Open5GS, y cómo se conectan**, hasta el nivel de archivos fuente, funciones, hilos, protocolos y archivos de configuración. Complementa a [`arquitectura.md`](arquitectura.md) (que lista versiones, IP y puertos) y a [`panel.md`](panel.md).
+Este documento explica **qué hace Narrowcast-NB, qué hacen por dentro OAI y Open5GS, y cómo se conectan**, hasta el nivel de archivos fuente, funciones, hilos, protocolos y archivos de configuración. Complementa a [`arquitectura.md`](arquitectura.md) (que lista versiones, IP y puertos) y a [`panel.md`](../operacion/panel.md).
 
 Convención de honestidad técnica usada en todo el texto:
 
@@ -25,18 +25,18 @@ Narrowcast-NB **no reimplementa** una red celular. Es un **integrador y operador
  └───────────────────────────────▲──────────────────────────────────────┘
                                  │ se configuran, se compilan y se orquestan
  ┌───────────────────────────────┴──────────────────────────────────────┐
- │  Código propio de Narrowcast-NB (~1 950 líneas)                       │
+ │  Código propio de Narrowcast-NB (~6 000 líneas)                     │
  │                                                                      │
  │  • Orquestación: compose.yaml, 4 Dockerfiles, entrypoints            │
  │  • Traducción de configuración: plan RF → enb.conf de OAI            │
  │  • Seguridad de radio: rf-check.sh, rf-run.sh, corte por tiempo      │
  │  • Aprovisionamiento: subscriber-init.js (SIM → MongoDB)             │
- │  • Panel: FastAPI (app/main.py) + JS (diagram/modules/app.js)        │
+ │  • Panel: FastAPI (app/main.py) + React (app/web/)                  │
  │  • Firmware ESP32 (SIM7080G + MQTT) y simulador (fake_device.py)     │
  └──────────────────────────────────────────────────────────────────────┘
 ```
 
-Líneas propias medidas con `wc -l`: `app/main.py` 472, `app/static/*` ≈1 250, `firmware` 86, `scripts/*` ≈110, `fake_device.py` 31, más YAML/Docker. [leído]
+Líneas propias medidas con `wc -l`: `app/main.py` 621, frontend React/TypeScript (`app/web/src/`) ≈2 800, simulador del Laboratorio (`app/simlab/*.py`) ≈1 100, ganchos de OAI para pruebas (`lab/oai-fakerf/`: `inject.c`, `fakedev.c`, `prepare.sh`) ≈240, `firmware` 86, `scripts/*` ≈130, `fake_device.py` 31, más YAML/Docker. [leído]
 
 **Qué aporta el proyecto que ninguno de los dos tiene:**
 
@@ -74,14 +74,7 @@ open5gs/
 
 Open5GS compila **todo** (la imagen ejecuta `meson setup build` + `ninja`) y en `compose.yaml` solo arrancamos siete binarios EPC:
 
-| Servicio compose | Binario | Archivo de config propio |
-|---|---|---|
-| `mme` | `open5gs-mmed` | `config/open5gs/mme.yaml` |
-| `hss` | `open5gs-hssd` | `hss.yaml` |
-| `sgwc` / `sgwu` | `open5gs-sgwcd` / `open5gs-sgwud` | `sgwc.yaml` / `sgwu.yaml` |
-| `pgwc` | **`open5gs-smfd`** | `pgwc.yaml` |
-| `pgwu` | **`open5gs-upfd`** | `pgwu.yaml` |
-| `pcrf` | `open5gs-pcrfd` | `pcrf.yaml` |
+Servicios, binarios y YAML de cada función: ver la tabla de [`arquitectura.md` §3](arquitectura.md#3-open5gs-qué-partes-se-usan) (los servicios de Compose se llaman `mme`, `hss`, `sgwc`, `sgwu`, `pgwc`, `pgwu`, `pcrf`).
 
 `smfd` y `upfd` son los demonios del núcleo 5G que, si el YAML trae `gtpc`/`gtpu` y `freeDiameter` (en vez de `sbi`), **actúan como PGW-C y PGW-U** del EPC. [leído en `pgwc.yaml`: tiene `gtpc`, `pfcp`, `freeDiameter`, sin `sbi`.]
 
@@ -96,7 +89,7 @@ Cada binario es **un proceso** con un patrón de bucle de eventos [leído en `sr
 
 Los tipos de evento del MME están en `src/mme/mme-event.h` [leído]: `MME_EVENT_S1AP_MESSAGE`, `MME_EVENT_EMM_MESSAGE`, `MME_EVENT_ESM_MESSAGE`, `MME_EVENT_S6A_MESSAGE`, `MME_EVENT_S11_MESSAGE`, más sus `*_TIMER`. Es decir, **cada interfaz del EPC es una fuente de eventos hacia una máquina de estados**.
 
-> Esto explica el aviso `epoll failed (EINTR)` que sale en los registros: `epoll_wait` fue interrumpido por una señal; el bucle reintenta. Es inofensivo (documentado en `docs/etapas.md`).
+> Esto explica el aviso `epoll failed (EINTR)` que sale en los registros: `epoll_wait` fue interrumpido por una señal; el bucle reintenta. Es inofensivo (documentado en `docs/operacion/puesta-en-marcha.md`).
 
 ### 2.3 El MME: tres máquinas de estados anidadas
 
@@ -313,7 +306,7 @@ Un solo proceso Python que integra **cinco fuentes** distintas en una API [leíd
 
 Para saber si el eNB está conectado, `/api/enb` **lee los registros del contenedor `nb-mme`** y busca la cadena `eNB-S1 accepted` (el mensaje que genera `s1ap_handle_s1_setup_request`, §2.3). Es decir, el panel observa a Open5GS a través de sus registros, sin modificarlo.
 
-El frontend (`app/static/`) es JavaScript sin *framework*: `diagram.js` dibuja los diagramas animados del flujo, `modules.js` implementa cada pestaña y `app.js` el estado global y la conexión SSE.
+El frontend (`app/web/`) es React + TypeScript: `components/Diagram.tsx` dibuja los diagramas animados del flujo, cada pestaña es un componente de `tabs/` y `store.ts` guarda el estado global y la conexión SSE.
 
 ### 4.6 Dispositivo: firmware y simulador
 
@@ -381,28 +374,10 @@ ESP32: lee DHT22 → mqtt.publish("nb/<id>/telemetry", {"temp":..})   [esp32-nbi
 
 ## 7. Qué está verificado y qué no
 
-| Elemento | Estado |
-|---|---|
-| Open5GS compila, EPC arranca, S6a/Gx/PFCP entre contenedores | **Verificado** (Fase 1) |
-| Attach completo con UE virtual srsRAN y ping por el túnel | **Verificado** (`scripts/validate.sh`) |
-| OAI NB-IoT compila en contenedor (`lte-softmodem`) | **Verificado** (`docker build`) |
-| S1 Setup eNB OAI → MME Open5GS (`eNB-S1 accepted`) | **Verificado, sin radio** |
-| Panel, MQTT, aprovisionamiento, CRUD de suscriptores | **Verificado** (con simulador) |
-| USRP + emisión NB-IoT real | Sin verificar (falta hardware y autorización) |
-| Attach de un módulo NB-IoT real contra OAI + Open5GS | Sin verificar (riesgo principal) |
-| Firmware ESP32 con SIM7080G | Sin verificar |
-| `tx_gain` como ganancia (no atenuación) | **Corregido** según el código leído (§3.5); falta medir potencia real |
-| Optimizaciones CIoT (datos sobre NAS, PSM/eDRX negociado) con esta pareja | Sin verificar |
+Ver la tabla única de estado en [`verificacion.md`](../referencia/verificacion.md).
 
 ---
 
-## 8. Preguntas probables y respuestas cortas
+## 8. Preguntas recurrentes
 
-- **¿Programaron el protocolo NB-IoT?** No. La capa física y el MAC NB-IoT son de OAI (rama `develop-nb-iot`, archivos `*_NB_IoT.c`). Nuestro aporte es compilarlo reproduciblemente, configurarlo desde un plan RF validado y conectarlo a un núcleo.
-- **¿Programaron el núcleo?** No. Es Open5GS; usamos 7 de sus binarios (EPC). Lo nuestro son los YAML, el `entrypoint.sh` (TUN, NAT, reescritura de freeDiameter) y el aprovisionamiento.
-- **¿Por qué 4G y no 5G?** NB-IoT en OAI se apoya en S1AP/EPC. El 5GC de Open5GS (AMF, SMF/UPF con SBI) existe pero no se usa.
-- **¿Cómo sabe el eNB que el núcleo es el correcto?** Por S1AP: el eNB manda su PLMN y TAC; el MME acepta solo si coinciden con `mme.tai` y `mme.gummei` (`s1ap_handle_s1_setup_request`).
-- **¿Cómo se autentica el módulo?** Milenage: el HSS toma K y OPc de MongoDB y calcula RAND/AUTN/XRES/K_ASME (`hss_ogs_diam_s6a_air_cb`); la SIM calcula lo mismo; deben coincidir.
-- **¿Dónde se separan señalización y datos?** Señalización: S1AP/SCTP (36412), GTPv2-C (2123), Diameter, PFCP (8805). Datos: GTP-U (2152) hasta la TUN `ogstun` del PGW-U.
-- **¿Qué hace el panel que no hacen los otros?** Valida y limita la emisión de radio, registra sesiones, administra suscriptores y muestra en vivo el estado del núcleo leyendo sus registros y el estado de Docker; y recibe/envía la telemetría de aplicación por MQTT.
-- **¿Qué tan lejos está de funcionar con una SIM real?** Todo el software de la ruta S1/EPC funciona; falta (1) un USRP, (2) la autorización de RF y (3) probar que el módulo NB-IoT se registre, que es el punto con más incertidumbre por la antigüedad de la rama de OAI.
+Ver [`preguntas-recurrentes.md`](../referencia/preguntas-recurrentes.md) (secciones 1, 2 y 8).

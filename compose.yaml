@@ -73,6 +73,27 @@ services:
     networks: { epc: { ipv4_address: 10.44.0.6 } }
     restart: unless-stopped
 
+  # Laboratorio de simulación: el nodo de riego NB-IoT (módulo NAS/MQTT + «mundo físico») que se registra por el eNB de OAI
+  # (servicio oai-lab) contra el núcleo. Reutiliza la imagen del panel (no ocupa disco extra). Lleva NET_ADMIN y /dev/net/tun
+  # para crear la interfaz de datos del módulo (su tráfico sale por el relevo UDP hacia OAI); por eso NO se le da esos permisos al panel.
+  simlab:
+    image: ${APP_IMAGE:-narrowcast-nb/app:local}
+    container_name: nb-simlab
+    command: ["uvicorn", "simlab.server:app", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_USER: ${MQTT_USER:?define MQTT_USER en .env}
+      MQTT_PASS: ${MQTT_PASS:?define MQTT_PASS en .env}
+      LAB_OAI_IP: 10.44.0.43
+    depends_on: [mongo, mosquitto]
+    volumes: ["./data:/data"]
+    cap_add: [NET_ADMIN, NET_RAW]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    sysctls: { net.ipv4.conf.all.rp_filter: 0, net.ipv4.conf.default.rp_filter: 0 }
+    ports: ["127.0.0.1:${LAB_PORT:-8090}:8090"]
+    networks: { epc: { ipv4_address: 10.44.0.42 } }
+    restart: unless-stopped
+
   mme:
     <<: *open5gs
     container_name: nb-mme
@@ -175,6 +196,22 @@ services:
       - ./scripts/oai-enb-start.sh:/scripts/oai-enb-start.sh:ro
       - ./data:/data:ro
     networks: { epc: { ipv4_address: 10.44.0.40 } }
+
+  # eNB de OAI con RADIO FALSA para el Laboratorio (no emite RF; no necesita USRP). Perfil "oailab": lo enciende el panel
+  # (Laboratorio > OAI). Crear una vez: docker compose --profile oailab create oai-lab
+  oai-lab:
+    profiles: [oailab]
+    image: ${OAI_IMAGE:-narrowcast-nb/oai-nbiot:local}
+    container_name: nb-oai-lab
+    entrypoint: ["sh", "/scripts/oai-lab-start.sh"]
+    cap_add: [SYS_NICE]
+    volumes:
+      - ./lab/oai-fakerf:/lab:ro
+      - ./config/oai/enb.nbiot.conf.tmpl:/tmp/tmpl:ro
+      - ./docker/oai-nbiot/patch-s1ap.py:/tmp/patch-s1ap.py:ro
+      - ./scripts/oai-lab-start.sh:/scripts/oai-lab-start.sh:ro
+      - ./data:/data
+    networks: { epc: { ipv4_address: 10.44.0.43 } }
 
 networks:
   epc:

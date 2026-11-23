@@ -2,3 +2,10 @@
 data/
 *.pcap
 firmware/**/secrets.h
+
+# Front compilado (se genera en la imagen; para desarrollo local: cd app/web && npm run build)
+app/static/
+app/web/node_modules/
+app/web/dist/
+__pycache__/
+*.pyc

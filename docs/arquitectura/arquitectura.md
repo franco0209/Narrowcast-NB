@@ -1,6 +1,6 @@
 # Arquitectura técnica
 
-Este documento describe cómo está construido Narrowcast-NB: qué software de terceros se usa y en qué versión, qué parte de cada uno se emplea, cómo se comunican los componentes (interfaces, protocolos, puertos, direcciones) y qué reglas de seguridad de radio se aplican. Para la visión general, ver el [README](../README.md); para el panel, [`panel.md`](panel.md); para imágenes y compilación, [`docker-y-compilacion.md`](docker-y-compilacion.md).
+Este documento describe cómo está construido Narrowcast-NB: qué software de terceros se usa y en qué versión, qué parte de cada uno se emplea, cómo se comunican los componentes (interfaces, protocolos, puertos, direcciones) y qué reglas de seguridad de radio se aplican. Para la visión general, ver el [README](../../README.md); para el panel, [`panel.md`](../operacion/panel.md); para imágenes y compilación, [`docker-y-compilacion.md`](../operacion/docker-y-compilacion.md).
 
 ## 1. Vista de capas
 
@@ -44,6 +44,7 @@ Una sola red Docker (`narrowcast-nb-core`, bridge, `10.44.0.0/24`) con IP fija p
 | 10.44.0.16 | `nb-pcrf` | PCRF | Diameter (Gx) |
 | 10.44.0.40 | `nb-enb-nbiot` (perfil `radio`) o `nb-enb` (perfil `sim`) | eNB | SCTP (S1AP), UDP 2152 (S1-U) |
 | 10.44.0.41 | `nb-ue` (perfil `sim`) | UE virtual | — |
+| 10.44.0.42 | `nb-simlab` | módulo del nodo de riego del **Laboratorio** (NAS real, MQTT real; su tráfico sale por OAI) | SCTP hacia 36412, UDP 2152, API 8090 → `127.0.0.1:8090` |
 
 Solo la WebUI, el broker y el panel se publican hacia el host, y solo en `127.0.0.1`. Los puertos de señalización y de datos del núcleo (36412, 2123, 8805, 2152, Diameter) nunca salen de la red Docker. Los puertos estándar de cada interfaz (36412, 2123, 8805, 2152) son los de 3GPP; el puerto de Diameter es el de freeDiameter por defecto y no se fija en este repositorio.
 
@@ -206,4 +207,4 @@ Seguridad del panel: monta `/var/run/docker.sock` para encender el eNB, lo que e
 
 ## 10. Simulación sin hardware
 
-Sin USRP ni ESP32, el panel distingue lo físico de lo simulado (ver `docs/panel.md` §4.3–4.5): el núcleo es real; la radio puede ser virtual (srsRAN, perfil `sim`) y el dispositivo lo emula `fake_device.py`, que publica telemetría inventada directo al broker. Valida broker, panel y comandos, no el registro de la SIM ni el túnel por el núcleo. Los `epoll failed (EINTR)` de los registros de Open5GS son ruido conocido y no afectan.
+Sin USRP ni ESP32, el panel distingue lo físico de lo simulado (ver `docs/operacion/panel.md` §4.3–4.5): el núcleo es real; la radio puede ser virtual (srsRAN, perfil `sim`) y el dispositivo lo emula `fake_device.py`, que publica telemetría inventada directo al broker. Valida broker, panel y comandos, no el registro de la SIM ni el túnel por el núcleo. Los `epoll failed (EINTR)` de los registros de Open5GS son ruido conocido y no afectan.

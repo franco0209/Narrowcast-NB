@@ -28,6 +28,13 @@ RUN . ./oaienv && cd cmake_targets \
     && ls -l lte_build_oai/build/lte-softmodem \
     && rm -rf /var/lib/apt/lists/* /opt/oai/.git
 
+# CORRECCION de OAI (unica modificacion de codigo): el decodificador S1AP descarta el Initial Context Setup Request si trae
+# el IE Masked-IMEISV (id 192) que Open5GS envia; se omite ese IE en vez de devolver error. Ver docs/modificaciones-oai-open5gs.md.
+COPY patch-s1ap.py /tmp/patch-s1ap.py
+RUN python3 /tmp/patch-s1ap.py \
+    && cd cmake_targets/lte_build_oai/build && (make -j2 lte-softmodem > /tmp/make.log 2>&1 || { tail -n 30 /tmp/make.log; exit 1; }) \
+    && tail -n 2 /tmp/make.log && ls -l lte-softmodem && rm -f /tmp/patch-s1ap.py /tmp/make.log
+
 COPY entrypoint.sh /usr/local/bin/nb-oai-entrypoint
 RUN chmod +x /usr/local/bin/nb-oai-entrypoint
 ENTRYPOINT ["nb-oai-entrypoint"]
